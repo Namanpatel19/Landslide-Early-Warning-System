@@ -1,0 +1,15 @@
+{
+  "vibration_level": 0.32209215019807813,
+  "slope_angle": 0.14464239243273735,
+  "elevation": 0.10910166172733574,
+  "distance_to_construction_area": 0.10646152883207632,
+  "vegetation_index": 0.09703469617836127,
+  "distance_to_mining_area": 0.08489701258615862,
+  "soil_type_enc": 0.0501003634172887,
+  "historical_landslide_zone": 0.030778159543690044,
+  "rainfall_intensity_mm": 0.018746581745595316,
+  "humidity": 0.014958043349949457,
+  "soil_moisture": 0.014642067173031806,
+  "temperature": 0.006545342815697139,
+  "seismic_activity": 0.0
+}
