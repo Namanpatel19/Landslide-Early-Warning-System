@@ -35,6 +35,9 @@ class Settings:
     # ── NASA Earthdata ────────────────────────────────────────────
     NASA_EARTHDATA_TOKEN: str = os.getenv("NASA_EARTHDATA_TOKEN", "")
 
+    # ── Google Gemini ────────────────────────────────────────────
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+
     # ── Convenience flags ────────────────────────────────────────
     @property
     def has_gnews(self) -> bool:
@@ -47,6 +50,10 @@ class Settings:
     @property
     def has_nasa(self) -> bool:
         return bool(self.NASA_EARTHDATA_TOKEN)
+
+    @property
+    def has_gemini(self) -> bool:
+        return bool(self.GEMINI_API_KEY)
 
 
 # Singleton — import this everywhere

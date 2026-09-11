@@ -52,6 +52,7 @@ class PredictResponse(BaseModel):
     top_factors: List[Dict[str, Any]]  # [{name: str, importance: float}] sorted desc
     timestamp: datetime
     cached: bool = False
+    gemini_explanation: Optional[str] = None  # Plain language risk summary
 
 
 class PredictionRecord(BaseModel):
@@ -99,3 +100,37 @@ class HistoryResponse(BaseModel):
 class AlertsResponse(BaseModel):
     alerts: List[AlertRecord]
     total: int
+
+
+class ReportResponse(BaseModel):
+    id: int
+    image_path: str
+    lat: Optional[float]
+    lon: Optional[float]
+    location_name: str
+    has_exif_gps: bool
+    gemini_analysis: Optional[str]
+    severity: str
+    status: str
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ReportStatusUpdate(BaseModel):
+    status: str  # verified, rejected
+
+
+class AutoScannedLocationResponse(BaseModel):
+    id: int
+    lat: float
+    lon: float
+    location_name: str
+    risk_level: str
+    confidence: float
+    risk_score: float
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True

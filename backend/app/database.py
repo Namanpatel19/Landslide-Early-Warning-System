@@ -3,6 +3,8 @@ SQLite Database setup using SQLAlchemy (async).
 Tables:
   - predictions : all /predict calls (for history/trend)
   - alerts      : High/Critical predictions flagged as alerts
+  - public_reports: Crowdsourced reports uploaded by users
+  - auto_scanned: Latest results from the background sweep
 """
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -47,6 +49,37 @@ class AlertModel(Base):
     top_factors_json = Column(Text)  # serialized list of {name, importance}
     notified = Column(Boolean, default=False)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class PublicReportModel(Base):
+    __tablename__ = "public_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    image_path = Column(String(500), nullable=False)
+    lat = Column(Float, nullable=True)
+    lon = Column(Float, nullable=True)
+    location_name = Column(String(200), default="Unknown")
+    has_exif_gps = Column(Boolean, default=False)
+    gemini_analysis = Column(Text, nullable=True)  # JSON or text from Gemini
+    severity = Column(String(20), default="Pending") # Pending, Low, Medium, High, Critical, False Report
+    status = Column(String(20), default="pending") # pending, verified, rejected
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class AutoScannedLocationModel(Base):
+    """Stores the latest sweep result for a critical location"""
+    __tablename__ = "auto_scanned"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    lat = Column(Float, nullable=False, index=True)
+    lon = Column(Float, nullable=False, index=True)
+    location_name = Column(String(200))
+    risk_level = Column(String(20))
+    confidence = Column(Float)
+    risk_score = Column(Float)
+    features_json = Column(Text)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 
 
 async def init_db():

@@ -10,13 +10,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+import os
 
 # Load .env FIRST before any other app imports
 from .config import settings
 
 from .database import init_db
 from .ml.model import load_model, is_model_loaded
-from .routers import predict, history, alerts, news, satellite
+from .routers import predict, history, alerts, news, satellite, sweeper, reports
+from .tasks import start_sweeper, stop_sweeper
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -43,8 +46,11 @@ async def lifespan(app: FastAPI):
     else:
         logger.error("ML Model NOT loaded — run: python scripts/train_model.py")
 
+    start_sweeper()
+
     yield  # ← app is running
 
+    stop_sweeper()
     logger.info("Shutting down API...")
 
 
@@ -82,6 +88,12 @@ app.include_router(history.router)
 app.include_router(alerts.router)
 app.include_router(news.router)
 app.include_router(satellite.router)
+app.include_router(sweeper.router)
+app.include_router(reports.router)
+
+# Mount uploads dir
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 # ─── Health check ─────────────────────────────────────────────────────────────

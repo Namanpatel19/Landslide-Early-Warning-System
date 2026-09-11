@@ -114,3 +114,39 @@ export async function getSatelliteData(lat, lon) {
 export async function getHealth() {
   return apiFetch('/health');
 }
+
+// ─── Sweeper API ─────────────────────────────────────────────────────────────
+
+export async function getAutoScanned() {
+  return await apiFetch('/sweeper/latest');
+}
+
+export async function forceSweep() {
+  return await apiFetch('/sweeper/force', { method: 'POST' });
+}
+
+// ─── Public Reporting API ──────────────────────────────────────────────────
+
+export async function uploadReport(formData) {
+  const res = await fetch(`${API_URL}/reports/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Upload failed: ${errorText}`);
+  }
+  return res.json();
+}
+
+export async function getReports() {
+  return await apiFetch('/reports');
+}
+
+export async function updateReportStatus(id, status) {
+  return await apiFetch(`/reports/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  });
+}

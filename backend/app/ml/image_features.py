@@ -120,28 +120,40 @@ def extract_image_features(image_bytes: bytes) -> dict:
 
 def ensemble_risk_score(tabular_score: float,
                         image_features: Optional[dict],
-                        image_weight: float = 0.20) -> float:
+                        image_weight: float = 0.15,
+                        gemini_severity: str = "Pending") -> float:
     """
-    Combine tabular model risk score with image-derived score.
+    Combine tabular model risk score with image-derived score and Gemini visual assessment.
 
-    Ensemble:
-      final_score = (1 - image_weight) * tabular_score
-                  + image_weight       * image_risk_score
-
-    Default weight: 20% image, 80% tabular.
-    The tabular model uses live weather + geology = primary signal.
-    The image model adds visual terrain context.
-
-    If no valid image features (API unavailable), returns tabular_score unchanged.
-
-    Future scope: increase image_weight as CNN is fine-tuned on NER data.
+    Ensemble Logic (Strong Model focus):
+      - Tabular score (Random Forest + real-time data) carries the vast majority of the weight (80%+).
+      - Image Features (CNN/Classical CV) adjust the score slightly (15%).
+      - Gemini visual severity applies a small final adjustment (+/- 5%) to act as a
+        supplemental verifier, ensuring we don't just rely on Gemini.
     """
+    
+    # 1. Blend tabular and image features
     if not image_features or not image_features.get("valid", False):
-        return tabular_score
-
-    img_score = image_features.get("image_risk_score", 0.5)
+        img_score = tabular_score  # Neutral fallback
+    else:
+        img_score = image_features.get("image_risk_score", 0.5)
+        
     combined = (1 - image_weight) * tabular_score + image_weight * img_score
-    return round(float(np.clip(combined, 0.0, 1.0)), 4)
+    
+    # 2. Apply Gemini severity offset (capped at +/- 0.05)
+    # This respects the requirement: "dont just rely on gemini API make our model strong too"
+    gemini_offset = 0.0
+    if gemini_severity == "Critical":
+        gemini_offset = 0.05
+    elif gemini_severity == "High":
+        gemini_offset = 0.02
+    elif gemini_severity == "Medium":
+        gemini_offset = 0.0
+    elif gemini_severity == "Low":
+        gemini_offset = -0.05
+        
+    final_score = combined + gemini_offset
+    return round(float(np.clip(final_score, 0.0, 1.0)), 4)
 
 
 def _default_image_features() -> dict:

@@ -11,22 +11,26 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Mountain, Wifi, WifiOff, Satellite, Newspaper } from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { Mountain, Wifi, WifiOff, Satellite, Newspaper, Camera, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 import Map from './components/Map';
 import RiskCard from './components/RiskCard';
 import RainfallChart from './components/RainfallChart';
-import HighRiskZones from './components/HighRiskZones';
+import AutoScannedList from './components/AutoScannedList';
 import AlertHistory from './components/AlertHistory';
 import AlertModal from './components/AlertModal';
 import SatellitePreview from './components/SatellitePreview';
 import NewsPanel from './components/NewsPanel';
 
+import ReportPortal from './pages/ReportPortal';
+import AdminDashboard from './pages/AdminDashboard';
+
 import { predictRisk, getHealth } from './services/api';
 
 const CRITICAL_CONFIDENCE_THRESHOLD = 0.90;
 
-export default function App() {
+function MainDashboard() {
   const [predictions, setPredictions]         = useState([]);
   const [activePrediction, setActivePrediction] = useState(null);
   const [isLoading, setIsLoading]             = useState(false);
@@ -84,29 +88,36 @@ export default function App() {
 
   return (
     <div className="app-root">
-      {/* ── Header ────────────────────────────────────────────────────────── */}
+      {/* ── Header ───────────────────────────────────────────────────────────── */}
       <header className="app-header">
-        <div className="header-brand">
-          <Mountain size={20} className="brand-icon" />
-          <span className="brand-name">LandWatch <em>NER</em></span>
-          <span className="brand-sub">Landslide Early Warning System</span>
+        <div className="flex items-center gap-6">
+          <h1 className="logo">
+            <Mountain className="text-yellow-400 w-6 h-6" />
+            LandWatch <span className="text-yellow-400">NER</span>
+          </h1>
+          <span className="text-sm font-medium opacity-60 hidden sm:inline">
+            Landslide Early Warning System
+          </span>
         </div>
 
-        <div className="header-center">
-          <span className="header-region">Northeast India · Real-Time AI Monitoring</span>
+        <div className="flex-1 text-center hidden md:block text-xs font-semibold tracking-wider opacity-50 uppercase">
+          Northeast India · Real-Time AI Monitoring
         </div>
 
-        <div className="header-right">
-          <div className="api-status-badge" style={{ borderColor: statusBadge.color }}>
-            <span style={{ color: statusBadge.color }}>{statusBadge.icon}</span>
-            <span style={{ color: statusBadge.color, fontSize: 11 }}>
-              {statusBadge.text}
-            </span>
+        <div className="flex items-center gap-4">
+          <Link to="/report" className="flex items-center gap-1 text-sm font-medium text-blue-200 hover:text-white transition">
+            <Camera className="w-4 h-4" /> Report Concern
+          </Link>
+          <Link to="/admin" className="flex items-center gap-1 text-sm font-medium text-emerald-200 hover:text-white transition">
+            <ShieldCheck className="w-4 h-4" /> Admin
+          </Link>
+          
+          <div className={`status-badge ${apiStatus}`}>
+            {apiStatus === 'up' && <><Wifi className="w-4 h-4" /> System Live</>}
+            {apiStatus === 'down' && <><WifiOff className="w-4 h-4" /> Backend offline</>}
+            {apiStatus === 'model_missing' && <><AlertTriangle className="w-4 h-4" /> Model Missing</>}
+            {apiStatus === 'unknown' && 'Connecting...'}
           </div>
-          <a href="http://localhost:8000/docs" target="_blank"
-             rel="noopener noreferrer" className="api-docs-link">
-            API Docs ↗
-          </a>
         </div>
       </header>
 
@@ -159,7 +170,7 @@ export default function App() {
 
         {/* RIGHT PANEL */}
         <aside className="sidebar sidebar-right">
-          <HighRiskZones />
+          <AutoScannedList onLocationClick={handleLocationClick} />
           <AlertHistory refreshTrigger={alertRefreshTrigger} />
           <NewsPanel />
         </aside>
@@ -175,5 +186,17 @@ export default function App() {
         />
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<MainDashboard />} />
+        <Route path="/report" element={<ReportPortal />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+      </Routes>
+    </Router>
   );
 }

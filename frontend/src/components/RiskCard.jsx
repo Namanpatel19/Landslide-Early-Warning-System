@@ -193,6 +193,18 @@ export default function RiskCard({ prediction }) {
         </div>
       )}
 
+      {/* Explainability Section */}
+      {prediction.gemini_explanation && (
+        <div className="mt-4 p-3 bg-gray-50/50 rounded-lg border border-gray-100">
+          <h4 className="text-sm font-semibold text-gray-800 mb-1 flex items-center gap-2">
+            <span className="text-blue-500">✨</span> AI Assessment
+          </h4>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            {prediction.gemini_explanation}
+          </p>
+        </div>
+      )}
+
       {/* ─── Timestamp ─── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: '0.375rem',

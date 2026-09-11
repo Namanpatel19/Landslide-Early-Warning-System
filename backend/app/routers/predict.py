@@ -21,6 +21,7 @@ from ..services.geocoding import reverse_geocode        # Real Nominatim geocodi
 from ..services.satellite import get_satellite_data     # Satellite imagery
 from ..ml.model import predict, is_model_loaded
 from ..ml.image_features import extract_image_features, ensemble_risk_score
+from ..services.gemini_service import generate_risk_explanation
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/predict", tags=["Prediction"])
@@ -134,6 +135,9 @@ async def predict_risk(
 
     await db.commit()
 
+    # ─── Generate Gemini plain-language explanation (Async) ───────────────────
+    explanation = await generate_risk_explanation(features, result["risk_level"], result["confidence"])
+
     return PredictResponse(
         lat=req.lat,
         lon=req.lon,
@@ -159,6 +163,7 @@ async def predict_risk(
         top_factors=result["top_factors"],
         timestamp=now,
         cached=weather_data.get("cached", False),
+        gemini_explanation=explanation,
     )
 
 

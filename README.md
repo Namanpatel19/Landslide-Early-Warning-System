@@ -46,12 +46,19 @@ An AI-powered Landslide Early Warning and Risk Monitoring System for Northeast I
 cd SIH/
 ```
 
-### 2. Backend Setup
+### Backend (Python/FastAPI)
 ```bash
 cd backend
-
-# Install Python dependencies
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# Mac/Linux: source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+#### API Keys & `.env`
+1. Copy `.env.example` to `.env`
+2. Get a **Google Gemini API Key (Free)** from [Google AI Studio](https://aistudio.google.com/app/apikey).
+3. (Optional) Get Sentinel Hub / GNews API keys as detailed in the file.
 
 # Train the ML model (one-time, ~30 seconds)
 python scripts/train_model.py
@@ -79,9 +86,14 @@ Frontend runs at: **http://localhost:5173**
 ### 4. Use the App
 1. Open **http://localhost:5173**
 2. **Click anywhere on the Northeast India map** to trigger a prediction
-3. See risk level, confidence %, live weather data, and top contributing factors
-4. Critical/High risk predictions automatically appear in **Alert History**
-5. Confidence > 90% triggers the **Critical Alert Modal**
+
+## Key Features
+1. **Real-time Risk Prediction**: Random Forest ensemble model with live data.
+2. **Auto-Scanned Critical Locations**: Background sweep every 20 minutes across known high-risk NER zones.
+3. **Gemini Vision & Text**: Provides plain-language explanations of risk factors and analyzes user-uploaded photos for visual signs of landslides.
+4. **Public Reporting Portal**: Crowdsourced reporting where citizens can upload photos (auto-extracts GPS) which are AI-screened for severity.
+5. **Ensemble ML**: Blends Tabular features (80% weight), classical computer vision / CNN (15% weight), and Gemini visual assessments (+/- 5% weight) to maintain a strong core model while utilizing multimodal AI.
+6. **Live Dashboard**: Interactive Leaflet map with real-time weather and alerts. triggers the **Critical Alert Modal**
 
 ---
 
