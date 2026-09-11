@@ -12,13 +12,28 @@ const BASE_URL = import.meta.env.VITE_API_URL || '';
 
 async function apiFetch(path, options = {}) {
   const url = `${BASE_URL}${path}`;
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+  } catch (networkErr) {
+    // Network error (backend completely unreachable)
+    throw new Error('Backend offline — start: uvicorn app.main:app --reload --port 8000');
+  }
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `API error ${res.status}`);
+    // Try to parse JSON error detail; fall back to status text
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `API error ${res.status}`);
+    }
+    // Non-JSON (e.g. Vite proxy HTML "Not Found" when backend is down)
+    if (res.status === 404) throw new Error(`Endpoint not found: ${path}`);
+    if (res.status >= 500) throw new Error('Backend error — check uvicorn logs');
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
   }
   return res.json();
 }

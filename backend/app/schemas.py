@@ -4,7 +4,7 @@ All request/response models are defined here for validation and docs.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
 
@@ -49,7 +49,7 @@ class PredictResponse(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0)
     risk_score: float = Field(..., ge=0.0, le=1.0)
     features: FeatureValues
-    top_factors: List[Dict[str, float]]  # [{name, importance}] sorted desc
+    top_factors: List[Dict[str, Any]]  # [{name: str, importance: float}] sorted desc
     timestamp: datetime
     cached: bool = False
 
@@ -77,7 +77,7 @@ class AlertRecord(BaseModel):
     location_name: str
     risk_level: str
     confidence: float
-    top_factors: List[Dict[str, float]]
+    top_factors: List[Dict[str, Any]]
     notified: bool
     timestamp: datetime
 

@@ -64,10 +64,14 @@ app = FastAPI(
 )
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
+# In development: allow all origins (any Vite port works without config changes)
+# In production:  restrict to ALLOWED_ORIGINS from .env
+_cors_origins = ["*"] if settings.ENVIRONMENT == "development" else settings.ALLOWED_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=False,   # must be False when allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
