@@ -78,6 +78,7 @@ class AutoScannedLocationModel(Base):
     confidence = Column(Float)
     risk_score = Column(Float)
     features_json = Column(Text)
+    gemini_explanation = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 

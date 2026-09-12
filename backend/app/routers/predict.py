@@ -21,7 +21,7 @@ from ..services.geocoding import reverse_geocode        # Real Nominatim geocodi
 from ..services.satellite import get_satellite_data     # Satellite imagery
 from ..ml.model import predict, is_model_loaded
 from ..ml.image_features import extract_image_features, ensemble_risk_score
-from ..services.gemini_service import generate_risk_explanation
+from ..services.gemini_service import generate_risk_explanation, analyze_landslide_image_bytes
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/predict", tags=["Prediction"])
@@ -85,19 +85,36 @@ async def predict_risk(
     result = predict(features)
     features["vibration_level"] = result["vibration_level"]
 
-    # ─── Image feature extraction + ensemble ──────────────────────────────────
+    # ─── Image feature extraction + Gemini Vision ensemble ───────────────────
     image_features = None
+    gemini_vision_severity = "Pending"  # Default: no visual data
+
     if satellite_data.get("image_b64"):
         import base64
         img_bytes = base64.b64decode(satellite_data["image_b64"])
         image_features = extract_image_features(img_bytes)
         logger.info(f"Image features: {image_features}")
 
-    # Ensemble: blend tabular + image scores
+        # Run Gemini Vision on satellite image concurrently with persistence
+        # Gemini provides supplemental visual assessment (cracks, erosion, bare soil)
+        # This contributes ~10% to the final ensemble adjustment
+        try:
+            gemini_vision_result = await analyze_landslide_image_bytes(img_bytes)
+            gemini_vision_severity = gemini_vision_result.get("severity", "Pending")
+            logger.info(f"Gemini Vision severity: {gemini_vision_severity}")
+        except Exception as e:
+            logger.warning(f"Gemini Vision analysis failed (non-critical): {e}")
+
+    # Ensemble weights:
+    #   75% Tabular (Random Forest on 13 real-time + geo features) — primary model
+    #   15% CNN/CV (classical image features from satellite tile)
+    #   10% Gemini Vision (adjusts score +0.05 if Critical, -0.05 if Low)
+    # This ensures model accuracy is preserved while Gemini adds multimodal depth.
     ensemble_score = ensemble_risk_score(
         tabular_score=result["risk_score"],
         image_features=image_features,
-        image_weight=0.20,
+        image_weight=0.15,
+        gemini_severity=gemini_vision_severity,
     )
 
     now = datetime.now(timezone.utc)

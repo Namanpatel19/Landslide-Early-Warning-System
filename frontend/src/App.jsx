@@ -1,46 +1,46 @@
 /**
- * LandWatch NER — Main Application
- * ====================================
+ * LandWatch NER — Main Application (Redesigned)
+ * ===============================================
  * Layout:
- *   Header (nav + API status)
- *   Body:
- *     Left panel:   RiskCard → SatellitePreview → RainfallChart
- *     Center:       Interactive Leaflet Map (NER-locked)
- *     Right panel:  HighRiskZones → AlertHistory → NewsPanel
- *   Critical Alert Modal (fires at confidence > 90%)
+ *   Header (nav + status)
+ *   Main body: Header stats bar + Sorted City Risk Grid
+ *   Clicking a city → LocationDetailDrawer (mini map + full details)
+ *
+ * Two portals:
+ *   /report  → Citizen/Tourist: photo upload only
+ *   /admin   → Authority: full access (requires authority login in future)
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { Mountain, Wifi, WifiOff, Satellite, Newspaper, Camera, ShieldCheck, AlertTriangle } from 'lucide-react';
+import {
+  Wifi, WifiOff, AlertTriangle, Camera, ShieldCheck,
+  RefreshCw, Bell, TrendingUp, MapPin, Clock
+} from 'lucide-react';
 
-import Map from './components/Map';
-import RiskCard from './components/RiskCard';
-import RainfallChart from './components/RainfallChart';
-import AutoScannedList from './components/AutoScannedList';
-import AlertHistory from './components/AlertHistory';
+import AutoScannedGrid from './components/AutoScannedGrid';
 import AlertModal from './components/AlertModal';
-import SatellitePreview from './components/SatellitePreview';
+import AlertHistory from './components/AlertHistory';
 import NewsPanel from './components/NewsPanel';
+import LocationDetailDrawer from './components/LocationDetailDrawer';
 
-import ReportPortal from './pages/ReportPortal';
+import CitizenPortal from './pages/CitizenPortal';
 import AdminDashboard from './pages/AdminDashboard';
 
-import { predictRisk, getHealth } from './services/api';
+import { predictRisk, getHealth, getAlerts } from './services/api';
 
 const CRITICAL_CONFIDENCE_THRESHOLD = 0.90;
 
 function MainDashboard() {
-  const [predictions, setPredictions]         = useState([]);
-  const [activePrediction, setActivePrediction] = useState(null);
-  const [isLoading, setIsLoading]             = useState(false);
-  const [error, setError]                     = useState(null);
-  const [apiStatus, setApiStatus]             = useState('unknown');
-  const [criticalAlert, setCriticalAlert]     = useState(null);
+  const [activePrediction, setActivePrediction]   = useState(null);
+  const [isLoading, setIsLoading]                 = useState(false);
+  const [apiStatus, setApiStatus]                 = useState('unknown');
+  const [criticalAlert, setCriticalAlert]         = useState(null);
   const [alertRefreshTrigger, setAlertRefreshTrigger] = useState(0);
-  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [drawerOpen, setDrawerOpen]               = useState(false);
+  const [alertCount, setAlertCount]               = useState(0);
 
-  // ── API health check every 30s ──────────────────────────────────────────────
+  // API health check every 30s
   useEffect(() => {
     const check = () =>
       getHealth()
@@ -51,133 +51,108 @@ function MainDashboard() {
     return () => clearInterval(id);
   }, []);
 
-  // ── Map click handler ───────────────────────────────────────────────────────
-  const handleLocationClick = useCallback(async (lat, lon) => {
+  // Alert count badge
+  useEffect(() => {
+    getAlerts(100).then(a => setAlertCount(a.length)).catch(() => {});
+    const id = setInterval(() => {
+      getAlerts(100).then(a => setAlertCount(a.length)).catch(() => {});
+    }, 30000);
+    return () => clearInterval(id);
+  }, [alertRefreshTrigger]);
+
+  const handleLocationClick = useCallback(async (lat, lon, preloadedData = null) => {
+    setDrawerOpen(true);
     setIsLoading(true);
-    setError(null);
-    setSelectedLocation({ lat, lon });
+
+    if (preloadedData) {
+      // If clicking a pre-scanned location, show it instantly then optionally refresh
+      setActivePrediction(preloadedData);
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const result = await predictRisk(lat, lon);
       setActivePrediction(result);
-      setPredictions(prev => [result, ...prev].slice(0, 50));
 
-      // Trigger critical alert modal
-      if (result.confidence >= CRITICAL_CONFIDENCE_THRESHOLD &&
-          result.risk_level !== 'Low') {
+      if (result.confidence >= CRITICAL_CONFIDENCE_THRESHOLD && result.risk_level !== 'Low') {
         setCriticalAlert(result);
       }
-
-      // Refresh alert history panel
       if (['High', 'Critical'].includes(result.risk_level)) {
         setAlertRefreshTrigger(t => t + 1);
       }
     } catch (err) {
-      setError(err.message || 'Prediction failed. Is the backend running?');
+      console.error('Prediction failed:', err);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const statusBadge = {
-    up:            { text: 'Live', color: '#22c55e', icon: <Wifi size={12}/> },
-    down:          { text: 'Backend offline', color: '#ef4444', icon: <WifiOff size={12}/> },
-    model_missing: { text: 'Model not trained', color: '#f59e0b', icon: <WifiOff size={12}/> },
-    unknown:       { text: 'Connecting…', color: '#94a3b8', icon: <Wifi size={12}/> },
+  const statusInfo = {
+    up:            { label: 'System Live', color: '#16a34a', icon: <Wifi size={13} /> },
+    down:          { label: 'Backend Offline', color: '#dc2626', icon: <WifiOff size={13} /> },
+    model_missing: { label: 'Model Missing', color: '#f59e0b', icon: <AlertTriangle size={13} /> },
+    unknown:       { label: 'Connecting…', color: '#94a3b8', icon: <Wifi size={13} /> },
   }[apiStatus];
 
   return (
     <div className="app-root">
-      {/* ── Header ───────────────────────────────────────────────────────────── */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="app-header">
-        <div className="flex items-center gap-6">
-          <h1 className="logo">
-            <Mountain className="text-yellow-400 w-6 h-6" />
-            LandWatch <span className="text-yellow-400">NER</span>
-          </h1>
-          <span className="text-sm font-medium opacity-60 hidden sm:inline">
-            Landslide Early Warning System
-          </span>
-        </div>
-
-        <div className="flex-1 text-center hidden md:block text-xs font-semibold tracking-wider opacity-50 uppercase">
-          Northeast India · Real-Time AI Monitoring
-        </div>
-
-        <div className="flex items-center gap-4">
-          <Link to="/report" className="flex items-center gap-1 text-sm font-medium text-blue-200 hover:text-white transition">
-            <Camera className="w-4 h-4" /> Report Concern
-          </Link>
-          <Link to="/admin" className="flex items-center gap-1 text-sm font-medium text-emerald-200 hover:text-white transition">
-            <ShieldCheck className="w-4 h-4" /> Admin
-          </Link>
-          
-          <div className={`status-badge ${apiStatus}`}>
-            {apiStatus === 'up' && <><Wifi className="w-4 h-4" /> System Live</>}
-            {apiStatus === 'down' && <><WifiOff className="w-4 h-4" /> Backend offline</>}
-            {apiStatus === 'model_missing' && <><AlertTriangle className="w-4 h-4" /> Model Missing</>}
-            {apiStatus === 'unknown' && 'Connecting...'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <img src="/logo.png" alt="LandWatch" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#1c1917', lineHeight: 1.1 }}>
+              LandWatch <span style={{ color: '#d97706' }}>NER</span>
+            </div>
+            <div style={{ fontSize: '0.7rem', color: '#78716c', fontWeight: 500 }}>
+              AI Landslide Early Warning · Northeast India
+            </div>
           </div>
+        </div>
+
+        <div className="header-nav">
+          <Link to="/report" className="nav-link nav-link-blue">
+            <Camera size={14} /> Report Concern
+          </Link>
+          <Link to="/admin" className="nav-link nav-link-green">
+            <ShieldCheck size={14} /> Authority Portal
+          </Link>
+          <div className="status-pill" style={{ background: statusInfo.color + '18', color: statusInfo.color }}>
+            {statusInfo.icon} {statusInfo.label}
+          </div>
+          {alertCount > 0 && (
+            <div className="alert-count-badge">
+              <Bell size={12} /> {alertCount} alerts
+            </div>
+          )}
         </div>
       </header>
 
-      {/* ── Loading bar ────────────────────────────────────────────────────── */}
-      {isLoading && <div className="loading-bar" />}
-
-      {/* ── Error banner ───────────────────────────────────────────────────── */}
-      {error && (
-        <div className="error-banner">
-          <span>⚠ {error}</span>
-          <button onClick={() => setError(null)}>✕</button>
+      {/* ── Main Body ──────────────────────────────────────────────────────── */}
+      <main className="dashboard-main">
+        {/* Left column: sorted location grid */}
+        <div className="dashboard-left">
+          <AutoScannedGrid onLocationClick={handleLocationClick} />
         </div>
-      )}
 
-      {/* ── Main layout ────────────────────────────────────────────────────── */}
-      <main className="app-body">
-
-        {/* LEFT PANEL */}
-        <aside className="sidebar sidebar-left">
-          <RiskCard prediction={activePrediction} isLoading={isLoading} />
-
-          {/* Satellite image — updates on each click */}
-          {selectedLocation && (
-            <SatellitePreview
-              lat={selectedLocation.lat}
-              lon={selectedLocation.lon}
-              locationName={activePrediction?.location_name}
-            />
-          )}
-
-          <RainfallChart
-            lat={activePrediction?.lat}
-            lon={activePrediction?.lon}
-          />
-        </aside>
-
-        {/* CENTER — MAP (NER-locked) */}
-        <section className="map-section">
-          <Map
-            predictions={predictions}
-            onLocationClick={handleLocationClick}
-            isLoading={isLoading}
-          />
-          <div className="map-hint">
-            {isLoading
-              ? '⏳ Fetching live data & running AI prediction…'
-              : '📍 Click anywhere on the NER map to predict landslide risk'}
-          </div>
-        </section>
-
-        {/* RIGHT PANEL */}
-        <aside className="sidebar sidebar-right">
-          <AutoScannedList onLocationClick={handleLocationClick} />
+        {/* Right column: alert history + news */}
+        <div className="dashboard-right">
           <AlertHistory refreshTrigger={alertRefreshTrigger} />
           <NewsPanel />
-        </aside>
-
+        </div>
       </main>
 
-      {/* ── Critical Alert Modal ────────────────────────────────────────────── */}
+      {/* ── Location Detail Drawer ─────────────────────────────────────────── */}
+      {drawerOpen && (
+        <LocationDetailDrawer
+          prediction={activePrediction}
+          isLoading={isLoading}
+          onClose={() => { setDrawerOpen(false); setActivePrediction(null); }}
+        />
+      )}
+
+      {/* ── Critical Alert Modal ───────────────────────────────────────────── */}
       {criticalAlert && (
         <AlertModal
           prediction={criticalAlert}
@@ -193,9 +168,9 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<MainDashboard />} />
-        <Route path="/report" element={<ReportPortal />} />
-        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/"       element={<MainDashboard />} />
+        <Route path="/report" element={<CitizenPortal />} />
+        <Route path="/admin"  element={<AdminDashboard />} />
       </Routes>
     </Router>
   );

@@ -1,59 +1,20 @@
 /**
  * AlertHistory — Scrollable log of all triggered alerts
- * Persisted in SQLite via /alerts endpoint.
  */
-
 import React, { useEffect, useState } from 'react';
-import { Bell, Clock, CheckCircle2 } from 'lucide-react';
+import { Bell, Clock, CheckCircle2, RefreshCw } from 'lucide-react';
 import { getAlerts } from '../services/api';
-import { formatDateTime, useRiskColor } from '../utils/helpers';
 
-function AlertRow({ alert }) {
-  const { color, bg } = useRiskColor(alert.risk_level);
-  return (
-    <div style={{
-      padding: '0.75rem',
-      borderRadius: 'var(--radius-md)',
-      background: bg,
-      border: `1px solid`,
-      borderColor: alert.risk_level === 'Critical' ? '#fecaca' : '#fed7aa',
-      marginBottom: '0.5rem',
-    }}>
-      <div style={{
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-        gap: '0.5rem',
-      }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: '0.8125rem', color, marginBottom: 2 }}>
-            {alert.risk_level} Risk Alert
-          </div>
-          <div style={{
-            fontSize: '0.75rem', color: 'var(--color-text-secondary)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {alert.location_name?.split('(')[0]?.trim()}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: 4 }}>
-            <Clock size={11} color="var(--color-text-muted)" />
-            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>
-              {formatDateTime(alert.timestamp)}
-            </span>
-          </div>
-        </div>
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: '0.875rem', fontWeight: 800, color }}>
-            {(alert.confidence * 100).toFixed(0)}%
-          </div>
-          {alert.notified && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: 2 }}>
-              <CheckCircle2 size={11} color="#16a34a" />
-              <span style={{ fontSize: '0.65rem', color: '#16a34a' }}>Notified</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+const RISK_COLORS = {
+  Critical: '#dc2626', High: '#ea580c', Medium: '#d97706', Low: '#16a34a',
+};
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  return `${Math.floor(diff / 3600)}h ago`;
 }
 
 export default function AlertHistory({ refreshTrigger }) {
@@ -61,58 +22,75 @@ export default function AlertHistory({ refreshTrigger }) {
   const [loading, setLoading] = useState(true);
 
   const fetchAlerts = () => {
-    getAlerts(20)
-      .then((res) => setAlerts(res.alerts || []))
+    getAlerts(30)
+      .then(res => setAlerts(Array.isArray(res) ? res : (res.alerts || [])))
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => {
-    fetchAlerts();
-  }, [refreshTrigger]);
+  useEffect(() => { fetchAlerts(); }, [refreshTrigger]);
 
   return (
-    <div className="card" style={{ padding: '1.25rem' }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: '0.5rem',
-        marginBottom: '0.875rem',
-      }}>
-        <Bell size={16} color="var(--risk-critical)" />
-        <span style={{ fontWeight: 700, fontSize: '0.9375rem' }}>Alert History</span>
-        {alerts.length > 0 && (
-          <span style={{
-            background: 'var(--risk-critical)',
-            color: '#fff',
-            borderRadius: 'var(--radius-full)',
-            fontSize: '0.65rem',
-            fontWeight: 700,
-            padding: '0.1rem 0.4rem',
-            marginLeft: 'auto',
-          }}>
-            {alerts.length}
-          </span>
-        )}
+    <div className="alert-history-card">
+      <div className="alert-history-header">
+        <div className="alert-history-title">
+          <Bell size={14} color="#dc2626" />
+          Alert History
+          {alerts.length > 0 && (
+            <span style={{
+              background: '#dc2626', color: '#fff',
+              borderRadius: 99, fontSize: 10, fontWeight: 800, padding: '1px 7px',
+            }}>
+              {alerts.length}
+            </span>
+          )}
+        </div>
+        <button
+          className="refresh-btn"
+          onClick={fetchAlerts}
+          style={{ padding: '4px 8px', fontSize: 11 }}
+        >
+          <RefreshCw size={11} />
+        </button>
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '1rem' }}>
-          <div className="spinner" />
-        </div>
-      ) : alerts.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '1rem' }}>
-          <div style={{ fontSize: '1.5rem', marginBottom: '0.375rem' }}>🔔</div>
-          <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-            No alerts yet
+      <div className="alert-history-body">
+        {loading ? (
+          <div className="alert-empty"><div className="spinner" /></div>
+        ) : alerts.length === 0 ? (
+          <div className="alert-empty">
+            <div style={{ fontSize: 22, marginBottom: 4 }}>🔔</div>
+            <div>No alerts yet</div>
+            <div style={{ fontSize: 11, marginTop: 2 }}>High/Critical risk events will appear here</div>
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
-            High/Critical risk events will appear here
-          </div>
-        </div>
-      ) : (
-        <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-          {alerts.map((alert) => <AlertRow key={alert.id} alert={alert} />)}
-        </div>
-      )}
+        ) : (
+          alerts.map(alert => {
+            const color = RISK_COLORS[alert.risk_level] || '#94a3b8';
+            return (
+              <div key={alert.id} className="alert-item">
+                <div className="alert-dot" style={{ background: color }} />
+                <div>
+                  <div className="alert-item-name" style={{ color }}>
+                    {alert.risk_level} Risk
+                  </div>
+                  <div className="alert-item-meta">
+                    {alert.location_name?.split('(')[0]?.trim()}
+                  </div>
+                  <div className="alert-item-meta" style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                    <Clock size={10} />
+                    {timeAgo(alert.timestamp)} · {(alert.confidence * 100).toFixed(0)}%
+                    {alert.notified && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 2, color: '#16a34a', marginLeft: 4 }}>
+                        <CheckCircle2 size={10} /> Notified
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

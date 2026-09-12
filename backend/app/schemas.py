@@ -130,6 +130,7 @@ class AutoScannedLocationResponse(BaseModel):
     risk_level: str
     confidence: float
     risk_score: float
+    gemini_explanation: Optional[str] = None
     timestamp: datetime
 
     class Config:

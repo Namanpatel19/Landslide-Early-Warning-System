@@ -101,11 +101,11 @@ export default function Map({ predictions, onLocationClick, isLoading }) {
         maxZoom={16}
         // Lazy load: tiles are requested only when visible
       >
-        {/* OpenStreetMap tiles — free, no key required */}
+        {/* OpenStreetMap standard tiles (Guaranteed to work everywhere) */}
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          // Load tiles only when near viewport (built into Leaflet)
+          // Load tiles only when near viewport
         />
 
         <MapClickHandler onLocationClick={onLocationClick} isLoading={isLoading} />
@@ -161,13 +161,13 @@ export default function Map({ predictions, onLocationClick, isLoading }) {
                   {/* Key metrics */}
                   {pred.features && (
                     <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
-                      <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#4b5563' }}>
                         🌧️ {pred.features.rainfall_intensity_mm?.toFixed(1)} mm/day rain
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#4b5563' }}>
                         ⛰️ {pred.features.slope_angle?.toFixed(1)}° slope
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#4b5563' }}>
                         💧 {(pred.features.soil_moisture * 100)?.toFixed(0)}% soil moisture
                       </div>
                     </div>
@@ -189,7 +189,8 @@ export default function Map({ predictions, onLocationClick, isLoading }) {
         bottom: 28,
         right: 12,
         zIndex: 500,
-        background: 'rgba(255,255,255,0.96)',
+        background: 'rgba(255, 255, 255, 0.9)',
+        backdropFilter: 'blur(8px)',
         borderRadius: 'var(--radius-md)',
         padding: '0.625rem 0.875rem',
         border: '1px solid var(--color-border)',

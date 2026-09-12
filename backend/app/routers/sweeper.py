@@ -41,6 +41,7 @@ async def get_latest_scans(db: AsyncSession = Depends(get_db)):
             "risk_level": r.risk_level,
             "confidence": r.confidence,
             "risk_score": r.risk_score,
+            "gemini_explanation": r.gemini_explanation,
             "timestamp": r.timestamp
         }
         for r in records

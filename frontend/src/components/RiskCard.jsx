@@ -195,11 +195,11 @@ export default function RiskCard({ prediction }) {
 
       {/* Explainability Section */}
       {prediction.gemini_explanation && (
-        <div className="mt-4 p-3 bg-gray-50/50 rounded-lg border border-gray-100">
-          <h4 className="text-sm font-semibold text-gray-800 mb-1 flex items-center gap-2">
-            <span className="text-blue-500">✨</span> AI Assessment
+        <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+          <h4 className="text-sm font-semibold text-blue-700 mb-1 flex items-center gap-2">
+            ✨ Gemini AI Assessment
           </h4>
-          <p className="text-sm text-gray-600 leading-relaxed">
+          <p className="text-sm text-gray-700 leading-relaxed">
             {prediction.gemini_explanation}
           </p>
         </div>

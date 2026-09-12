@@ -55,15 +55,15 @@ export default function ReportPortal() {
 
   if (success) {
     return (
-      <div className="max-w-2xl mx-auto p-6 mt-10 bg-white rounded-xl shadow-sm text-center">
-        <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Report Submitted Successfully</h2>
-        <p className="text-gray-600 mb-6">
+      <div className="portal-container" style={{ textAlign: 'center' }}>
+        <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto mb-4" style={{ margin: '0 auto', width: 64, height: 64, color: '#10b981' }} />
+        <h2 className="portal-title" style={{ justifyContent: 'center', marginBottom: 10 }}>Report Submitted Successfully</h2>
+        <p className="portal-text">
           Thank you. Your photo will be analyzed by our AI system and verified by local authorities.
         </p>
         <button 
           onClick={() => setSuccess(false)}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          className="btn-primary" style={{ width: 'auto', margin: '0 auto' }}
         >
           Submit Another Report
         </button>
@@ -75,46 +75,46 @@ export default function ReportPortal() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6 mt-10 bg-white rounded-xl shadow-sm border border-gray-100">
-      <div className="flex justify-between items-center mb-6 border-b pb-4">
-         <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <Camera className="w-6 h-6 text-blue-500" />
+    <div className="portal-container">
+      <div className="portal-header">
+         <h1 className="portal-title">
+            <Camera style={{ width: 24, height: 24, color: '#3b82f6' }} />
             Report a Landslide Concern
          </h1>
-         <Link to="/" className="text-sm text-blue-500 hover:underline">Back to Map</Link>
+         <Link to="/" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: 14 }}>Back to Map</Link>
       </div>
 
-      <p className="text-sm text-gray-600 mb-6">
+      <p className="portal-text">
         Upload a photo of potential landslide signs (cracks, severe erosion, unusual water seepage). 
         Our AI (Gemini) will perform an initial assessment, and local authorities will review it.
       </p>
 
       {error && (
-        <div className="p-3 mb-6 bg-red-50 text-red-700 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-5 h-5" />
+        <div style={{ padding: 12, marginBottom: 24, background: '#fef2f2', color: '#b91c1c', borderRadius: 8, display: 'flex', gap: 8 }}>
+          <AlertCircle style={{ width: 20, height: 20 }} />
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit}>
         {/* Photo Upload */}
-        <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:bg-gray-50 transition cursor-pointer relative">
+        <div className="upload-box">
           <input 
             type="file" 
             accept="image/*" 
             onChange={handleFileChange}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            className="upload-input"
           />
           {preview ? (
-            <div className="space-y-4">
-              <img src={preview} alt="Preview" className="max-h-64 mx-auto rounded-lg shadow-sm" />
-              <p className="text-sm text-blue-600 font-medium">Click to change photo</p>
+            <div>
+              <img src={preview} alt="Preview" style={{ maxHeight: 250, margin: '0 auto', borderRadius: 8 }} />
+              <p style={{ marginTop: 10, fontSize: 14, color: '#3b82f6' }}>Click to change photo</p>
             </div>
           ) : (
-            <div className="space-y-2">
-              <Upload className="w-10 h-10 text-gray-400 mx-auto" />
-              <p className="text-gray-700 font-medium">Click or drag a photo here</p>
-              <p className="text-xs text-gray-500">
+            <div>
+              <Upload style={{ width: 40, height: 40, color: '#94a3b8', margin: '0 auto 10px' }} />
+              <p style={{ fontWeight: 500, color: '#333' }}>Click or drag a photo here</p>
+              <p style={{ fontSize: 12, color: '#64748b', marginTop: 5 }}>
                 If your phone saves GPS location in photos, we will extract it automatically.
               </p>
             </div>
@@ -122,45 +122,45 @@ export default function ReportPortal() {
         </div>
 
         {/* Location Details */}
-        <div className="bg-gray-50 p-4 rounded-xl space-y-4 border border-gray-100">
-          <h3 className="font-medium text-gray-800 flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-blue-500" />
+        <div className="section-box">
+          <h3 className="portal-title" style={{ fontSize: '1.1rem', marginBottom: 5 }}>
+            <MapPin style={{ width: 18, height: 18, color: '#3b82f6' }} />
             Location Details (Optional)
           </h3>
-          <p className="text-xs text-gray-500">
+          <p className="portal-text" style={{ marginBottom: 15 }}>
             If your photo doesn't have GPS data, please provide the location manually.
           </p>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Location Description</label>
+          <div className="form-group">
+            <label className="form-label">Location Description</label>
             <input 
               type="text" 
               value={locationName}
               onChange={(e) => setLocationName(e.target.value)}
               placeholder="e.g. Near Shillong Highway MS 4"
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              className="form-input"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="form-group">
+              <label className="form-label">Latitude</label>
               <input 
                 type="number" step="any"
                 value={lat}
                 onChange={(e) => setLat(e.target.value)}
                 placeholder="25.57"
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="form-input"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
+            <div className="form-group">
+              <label className="form-label">Longitude</label>
               <input 
                 type="number" step="any"
                 value={lon}
                 onChange={(e) => setLon(e.target.value)}
                 placeholder="91.88"
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="form-input"
               />
             </div>
           </div>
@@ -169,7 +169,7 @@ export default function ReportPortal() {
         <button 
           type="submit" 
           disabled={submitting}
-          className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+          className="btn-primary"
         >
           {submitting ? 'Analyzing with AI & Uploading...' : 'Submit Report'}
         </button>
