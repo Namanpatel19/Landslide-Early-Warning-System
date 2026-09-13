@@ -66,6 +66,20 @@ class PublicReportModel(Base):
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class TruePositiveModel(Base):
+    """Stores historical true positives (landslides that actually occurred) for RAG"""
+    __tablename__ = "true_positives"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lat = Column(Float, nullable=False)
+    lon = Column(Float, nullable=False)
+    location_name = Column(String(200))
+    risk_level = Column(String(20))
+    confidence = Column(Float)
+    features_json = Column(Text) # The weather/geo conditions at the time
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class AutoScannedLocationModel(Base):
     """Stores the latest sweep result for a critical location"""
     __tablename__ = "auto_scanned"

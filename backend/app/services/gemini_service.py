@@ -15,7 +15,7 @@ if settings.has_gemini:
 else:
     _model = None
 
-async def generate_risk_explanation(features: Dict[str, Any], risk_level: str, confidence: float) -> Optional[str]:
+async def generate_risk_explanation(features: Dict[str, Any], risk_level: str, confidence: float, rag_context: str = "") -> Optional[str]:
     """
     Generates a short, plain-language summary explaining the landslide risk.
     """
@@ -34,7 +34,10 @@ async def generate_risk_explanation(features: Dict[str, Any], risk_level: str, c
     - Soil Moisture: {features.get('soil_moisture', 0)*100:.1f}%
     - Seismic Activity: {features.get('seismic_activity', 0)} (Richter scale equivalent)
     
+    {rag_context}
+
     Write a 2-3 sentence, plain-language explanation of WHY this risk level was assigned based on these conditions. 
+    If RAG Context is provided, explicitly mention that these conditions have historically led to landslides here.
     Make it easy for a non-technical local authority or citizen to understand. Do not use markdown.
     """
     

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, update
 from datetime import datetime, timezone
 
-from ..database import get_db, AlertModel
+from ..database import get_db, AlertModel, TruePositiveModel, AutoScannedLocationModel
 from ..schemas import AlertRecord, AlertsResponse, NotifyRequest
 
 logger = logging.getLogger(__name__)
@@ -82,3 +82,43 @@ async def notify_authorities(
         "alert_id": req.prediction_id,
         "method": req.method,
     }
+
+
+@router.post("/{alert_id}/true_positive")
+async def mark_true_positive(alert_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Mark an alert as a 'True Positive' (landslide actually occurred).
+    Saves the event to the TruePositiveModel for future RAG injection.
+    """
+    # 1. Fetch the alert
+    stmt = select(AlertModel).where(AlertModel.id == alert_id)
+    result = await db.execute(stmt)
+    alert = result.scalars().first()
+    
+    if not alert:
+        return {"error": "Alert not found"}, 404
+
+    # 2. Fetch the corresponding features from auto_scanned
+    stmt = select(AutoScannedLocationModel).where(
+        AutoScannedLocationModel.location_name == alert.location_name
+    ).order_by(desc(AutoScannedLocationModel.timestamp)).limit(1)
+    result = await db.execute(stmt)
+    scan = result.scalars().first()
+
+    features_json = scan.features_json if scan else "{}"
+
+    # 3. Insert into TruePositiveModel
+    tp = TruePositiveModel(
+        lat=alert.lat,
+        lon=alert.lon,
+        location_name=alert.location_name,
+        risk_level=alert.risk_level,
+        confidence=alert.confidence,
+        features_json=features_json,
+        timestamp=datetime.now(timezone.utc)
+    )
+    db.add(tp)
+    await db.commit()
+
+    logger.info(f"✅ Marked alert {alert_id} ({alert.location_name}) as True Positive.")
+    return {"status": "success", "message": "Saved to true positives for RAG."}

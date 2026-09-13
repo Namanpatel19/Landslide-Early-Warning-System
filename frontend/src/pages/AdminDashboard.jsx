@@ -5,7 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getReports, updateReportStatus, getAlerts } from '../services/api';
-import { ShieldCheck, XCircle, Clock, MapPin, Bell, ArrowLeft, RefreshCw, Eye } from 'lucide-react';
+import { ShieldCheck, XCircle, Clock, MapPin, Bell, ArrowLeft, RefreshCw, Eye, CheckCircle } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -50,6 +50,19 @@ export default function AdminDashboard() {
   const [loading, setLoading]   = useState(true);
   const [tab, setTab]           = useState('reports');
   const [refreshing, setRefreshing] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (password === 'admin123') {
+      setIsAuthenticated(true);
+      setLoginError('');
+    } else {
+      setLoginError('Invalid authority password');
+    }
+  };
 
   const fetchAll = async () => {
     setRefreshing(true);
@@ -77,6 +90,55 @@ export default function AdminDashboard() {
       alert('Failed to update status');
     }
   };
+
+  const handleTruePositive = async (alertId) => {
+    try {
+      const res = await fetch(`${API_BASE}/alerts/${alertId}/true_positive`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        alert('Alert marked as True Positive. Data saved for model RAG retraining.');
+      } else {
+        alert('Failed to mark true positive.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error confirming true positive.');
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="admin-page" style={{ justifyContent: 'center', alignItems: 'center' }}>
+        <div className="portal-card" style={{ maxWidth: 400, textAlign: 'center' }}>
+          <ShieldCheck size={48} color="#dc2626" style={{ margin: '0 auto 16px' }} />
+          <h2 style={{ marginBottom: 8 }}>Authority Access Restricted</h2>
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 24 }}>
+            Please enter your authority passcode to access the disaster management dashboard.
+          </p>
+          <form onSubmit={handleLogin}>
+            <input 
+              type="password" 
+              className="form-input" 
+              placeholder="Enter Password..." 
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              style={{ width: '100%', marginBottom: 12, textAlign: 'center', letterSpacing: 4 }}
+            />
+            {loginError && <div style={{ color: '#dc2626', fontSize: 12, marginBottom: 12 }}>{loginError}</div>}
+            <button type="submit" className="btn-primary" style={{ background: '#dc2626' }}>
+              Authenticate
+            </button>
+          </form>
+          <div style={{ marginTop: 24 }}>
+            <Link to="/" className="portal-back" style={{ display: 'inline-flex', border: 'none' }}>
+              <ArrowLeft size={14} /> Back to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-page">
@@ -238,7 +300,16 @@ export default function AdminDashboard() {
                         {' · '}{new Date(alert.timestamp).toLocaleString()}
                       </div>
                     </div>
-                    <SevBadge severity={alert.risk_level} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+                      <SevBadge severity={alert.risk_level} />
+                      <button 
+                        className="action-btn" 
+                        style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', padding: '4px 8px', fontSize: 10, width: 'auto' }}
+                        onClick={() => handleTruePositive(alert.id)}
+                      >
+                        <CheckCircle size={10} /> Confirm Landslide (RAG)
+                      </button>
+                    </div>
                   </div>
                 );
               })

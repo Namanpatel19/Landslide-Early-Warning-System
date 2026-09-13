@@ -3,7 +3,7 @@ import logging
 import json
 import base64
 from datetime import datetime, timezone
-from app.database import AsyncSessionLocal, AutoScannedLocationModel, AlertModel
+from app.database import AsyncSessionLocal, AutoScannedLocationModel, AlertModel, TruePositiveModel
 from app.ml.model import predict, is_model_loaded
 from app.ml.image_features import extract_image_features, ensemble_risk_score
 from app.services.weather import fetch_current_weather
@@ -141,9 +141,22 @@ async def run_sweep():
                     gemini_severity=gemini_vision_severity,
                 )
 
+                # ── RAG Context Fetching ──────────────────────────────────────
+                from sqlalchemy import select, desc
+                stmt = select(TruePositiveModel).where(
+                    TruePositiveModel.location_name == name
+                ).order_by(desc(TruePositiveModel.timestamp)).limit(3)
+                tp_res = await db.execute(stmt)
+                past_events = tp_res.scalars().all()
+                rag_context = ""
+                if past_events:
+                    rag_context = "RAG Context (Past confirmed landslides at this location):\n"
+                    for ev in past_events:
+                        rag_context += f"- Confirmed landslide occurred here previously with these conditions: {ev.features_json}\n"
+
                 # ── Gemini text explanation ───────────────────────────────────
                 explanation = await generate_risk_explanation(
-                    features, result["risk_level"], result["confidence"]
+                    features, result["risk_level"], result["confidence"], rag_context
                 )
 
                 # ── Persist result ────────────────────────────────────────────

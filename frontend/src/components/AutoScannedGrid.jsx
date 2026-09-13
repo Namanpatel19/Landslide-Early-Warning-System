@@ -5,6 +5,7 @@
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { getAutoScanned, forceSweep } from '../services/api';
+import GlobalAlertModal from './GlobalAlertModal';
 import { RefreshCw, AlertTriangle, ShieldCheck, Shield, Clock, MapPin } from 'lucide-react';
 
 const RISK_CONFIG = {
@@ -162,6 +163,7 @@ export default function AutoScannedGrid({ onLocationClick }) {
       </div>
 
       {/* ── Location Cards ──────────────────────────────────────────────── */}
+      <GlobalAlertModal locations={locations} />
       <div className="locations-grid">
         {loading ? (
           <div className="empty-state">

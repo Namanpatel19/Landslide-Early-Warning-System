@@ -1,15 +1,15 @@
 {
-  "vibration_level": 0.32209215019807813,
-  "slope_angle": 0.14464239243273735,
-  "elevation": 0.10910166172733574,
-  "distance_to_construction_area": 0.10646152883207632,
-  "vegetation_index": 0.09703469617836127,
-  "distance_to_mining_area": 0.08489701258615862,
-  "soil_type_enc": 0.0501003634172887,
-  "historical_landslide_zone": 0.030778159543690044,
-  "rainfall_intensity_mm": 0.018746581745595316,
-  "humidity": 0.014958043349949457,
-  "soil_moisture": 0.014642067173031806,
-  "temperature": 0.006545342815697139,
-  "seismic_activity": 0.0
+  "rainfall_intensity_mm": 0.29451749342953487,
+  "slope_angle": 0.20142949491053377,
+  "historical_landslide_zone": 0.11915589113573956,
+  "vegetation_index": 0.0708761402513193,
+  "humidity": 0.05650013652388163,
+  "soil_moisture": 0.05637925334842336,
+  "elevation": 0.045843682335942486,
+  "vibration_level": 0.03781768256928484,
+  "seismic_activity": 0.030559756381170863,
+  "distance_to_mining_area": 0.02965818487693216,
+  "temperature": 0.024543806870681327,
+  "distance_to_construction_area": 0.022187429073330656,
+  "soil_type_enc": 0.010531048293225086
 }

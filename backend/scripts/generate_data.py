@@ -15,7 +15,7 @@ from pathlib import Path
 # Set random seed for reproducibility
 np.random.seed(42)
 
-N_SAMPLES = 6000
+N_SAMPLES = 25000
 
 def generate_dataset(n: int = N_SAMPLES) -> pd.DataFrame:
     """Generate synthetic landslide training data for NER."""
@@ -102,17 +102,17 @@ def generate_dataset(n: int = N_SAMPLES) -> pd.DataFrame:
     )
 
     risk_score = (
-        0.25 * np.clip(rainfall_intensity_mm / 150, 0, 1)    # Normalise to typical monsoon max
-        + 0.15 * np.clip(slope_angle / 55, 0, 1)             # 55° is a realistic steep NER slope
-        + 0.12 * soil_moisture                                # Already [0,1]
-        + 0.10 * (1 - vegetation_index)                      # Low NDVI = deforested = higher risk
+        0.30 * np.clip(rainfall_intensity_mm / 150, 0, 1)    # Normalise to typical monsoon max (Increased weight)
+        + 0.20 * np.clip(slope_angle / 55, 0, 1)             # 55° is a realistic steep NER slope (Increased weight)
+        + 0.10 * soil_moisture                                # Already [0,1]
+        + 0.08 * (1 - vegetation_index)                      # Low NDVI = deforested = higher risk
         + 0.08 * np.clip(seismic_activity / 4.5, 0, 1)       # NER typical M<4.5 events
         + 0.08 * historical_landslide_zone
         + 0.07 * np.clip(vibration_level / 7, 0, 1)          # Practical sensor max
-        + 0.05 * np.clip((humidity - 40) / 55, 0, 1)         # Meaningful range: 40-95%
-        + 0.05 * soil_penalty
-        + 0.03 * np.clip(1 - distance_to_mining_area / 40, 0, 1)     # Risk within 40km
-        + 0.02 * np.clip(1 - distance_to_construction_area / 30, 0, 1)
+        + 0.04 * np.clip((humidity - 40) / 55, 0, 1)         # Meaningful range: 40-95%
+        + 0.03 * soil_penalty
+        + 0.01 * np.clip(1 - distance_to_mining_area / 40, 0, 1)     # Risk within 40km
+        + 0.01 * np.clip(1 - distance_to_construction_area / 30, 0, 1)
     )
 
     # Add realistic observational noise
@@ -124,7 +124,7 @@ def generate_dataset(n: int = N_SAMPLES) -> pd.DataFrame:
     # Thresholds derived from percentile analysis of the score distribution.
     risk_label = pd.cut(
         risk_score,
-        bins=[-np.inf, 0.28, 0.48, 0.63, np.inf],
+        bins=[-np.inf, 0.30, 0.50, 0.70, np.inf],
         labels=["Low", "Medium", "High", "Critical"]
     )
 

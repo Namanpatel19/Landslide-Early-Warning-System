@@ -41,6 +41,7 @@ async def get_latest_scans(db: AsyncSession = Depends(get_db)):
             "risk_level": r.risk_level,
             "confidence": r.confidence,
             "risk_score": r.risk_score,
+            "features": __import__("json").loads(r.features_json) if r.features_json else {},
             "gemini_explanation": r.gemini_explanation,
             "timestamp": r.timestamp
         }

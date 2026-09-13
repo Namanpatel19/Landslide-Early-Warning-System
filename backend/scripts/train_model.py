@@ -74,7 +74,7 @@ def load_data() -> pd.DataFrame:
 
     from generate_data import generate_dataset
     DATA_PATH.parent.mkdir(exist_ok=True)
-    df = generate_dataset(7000)
+    df = generate_dataset(25000)
     df.to_csv(DATA_PATH, index=False)
     print(f"Synthetic data saved to {DATA_PATH.name}")
     return df
