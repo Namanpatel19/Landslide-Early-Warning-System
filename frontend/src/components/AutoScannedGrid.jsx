@@ -5,15 +5,9 @@
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { getAutoScanned, forceSweep } from '../services/api';
+import { getRiskDetails } from '../utils/helpers';
 import GlobalAlertModal from './GlobalAlertModal';
 import { RefreshCw, AlertTriangle, ShieldCheck, Shield, Clock, MapPin } from 'lucide-react';
-
-const RISK_CONFIG = {
-  Critical: { color: '#dc2626', bg: '#fef2f2', border: '#fca5a5', label: 'CRITICAL', order: 0 },
-  High:     { color: '#ea580c', bg: '#fff7ed', border: '#fdba74', label: 'HIGH',     order: 1 },
-  Medium:   { color: '#d97706', bg: '#fffbeb', border: '#fcd34d', label: 'MEDIUM',   order: 2 },
-  Low:      { color: '#16a34a', bg: '#f0fdf4', border: '#86efac', label: 'LOW',      order: 3 },
-};
 
 function timeAgo(ts) {
   if (!ts) return 'Never';
@@ -21,15 +15,6 @@ function timeAgo(ts) {
   if (diff < 60) return `${diff}s ago`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   return `${Math.floor(diff / 3600)}h ago`;
-}
-
-function RiskBadge({ level }) {
-  const cfg = RISK_CONFIG[level] || RISK_CONFIG.Low;
-  return (
-    <span className="risk-badge" style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-      {cfg.label}
-    </span>
-  );
 }
 
 function ConfBar({ value, color }) {
@@ -51,13 +36,8 @@ export default function AutoScannedGrid({ onLocationClick }) {
     if (!quiet) setLoading(true);
     try {
       const data = await getAutoScanned();
-      // Sort by risk order then confidence
-      const sorted = [...data].sort((a, b) => {
-        const orderA = RISK_CONFIG[a.risk_level]?.order ?? 4;
-        const orderB = RISK_CONFIG[b.risk_level]?.order ?? 4;
-        if (orderA !== orderB) return orderA - orderB;
-        return b.confidence - a.confidence;
-      });
+      // Sort by risk score descending
+      const sorted = [...data].sort((a, b) => b.risk_score - a.risk_score);
       setLocations(sorted);
       setLastSynced(new Date());
     } catch (e) {
@@ -90,10 +70,10 @@ export default function AutoScannedGrid({ onLocationClick }) {
   const FILTERS = ['All', 'Critical', 'High', 'Medium', 'Low'];
   const filtered = filter === 'All'
     ? locations
-    : locations.filter(l => l.risk_level === filter);
+    : locations.filter(l => getRiskDetails(l.risk_score).level === filter);
 
-  const critCount  = locations.filter(l => l.risk_level === 'Critical').length;
-  const highCount  = locations.filter(l => l.risk_level === 'High').length;
+  const critCount  = locations.filter(l => getRiskDetails(l.risk_score).level === 'Critical').length;
+  const highCount  = locations.filter(l => getRiskDetails(l.risk_score).level === 'High').length;
 
   return (
     <div className="autoscan-container">
@@ -141,25 +121,30 @@ export default function AutoScannedGrid({ onLocationClick }) {
 
       {/* ── Filter Tabs ──────────────────────────────────────────────────── */}
       <div className="filter-tabs">
-        {FILTERS.map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`filter-tab ${filter === f ? 'active' : ''}`}
-            style={filter === f && f !== 'All' ? {
-              background: RISK_CONFIG[f]?.bg,
-              color: RISK_CONFIG[f]?.color,
-              borderColor: RISK_CONFIG[f]?.border,
-            } : {}}
-          >
-            {f}
-            {f !== 'All' && (
-              <span className="tab-count">
-                {locations.filter(l => l.risk_level === f).length}
-              </span>
-            )}
-          </button>
-        ))}
+        {FILTERS.map(f => {
+          // Mock score to get colors for tabs
+          const scoreMap = { Critical: 1.0, High: 0.80, Medium: 0.50, Low: 0.20 };
+          const mockStyle = getRiskDetails(scoreMap[f] || 0);
+          return (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`filter-tab ${filter === f ? 'active' : ''}`}
+              style={filter === f && f !== 'All' ? {
+                background: mockStyle.bg,
+                color: mockStyle.color,
+                borderColor: mockStyle.border,
+              } : {}}
+            >
+              {f}
+              {f !== 'All' && (
+                <span className="tab-count">
+                  {locations.filter(l => getRiskDetails(l.risk_score).level === f).length}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* ── Location Cards ──────────────────────────────────────────────── */}
@@ -183,8 +168,8 @@ export default function AutoScannedGrid({ onLocationClick }) {
           </div>
         ) : (
           filtered.map((loc, idx) => {
-            const cfg = RISK_CONFIG[loc.risk_level] || RISK_CONFIG.Low;
-            const isCritical = loc.risk_level === 'Critical';
+            const cfg = getRiskDetails(loc.risk_score);
+            const isCritical = cfg.level === 'Critical';
             return (
               <div
                 key={loc.id || idx}
@@ -193,7 +178,7 @@ export default function AutoScannedGrid({ onLocationClick }) {
                 onClick={() => onLocationClick(loc.lat, loc.lon, {
                   lat: loc.lat, lon: loc.lon,
                   location_name: loc.location_name,
-                  risk_level: loc.risk_level,
+                  risk_level: loc.risk_level, // Keep original or use cfg.level? Use cfg.level below
                   confidence: loc.confidence,
                   risk_score: loc.risk_score,
                   features: loc.features_json ? JSON.parse(loc.features_json) : null,
@@ -212,17 +197,27 @@ export default function AutoScannedGrid({ onLocationClick }) {
                     <MapPin size={12} style={{ color: cfg.color, flexShrink: 0 }} />
                     {loc.location_name}
                   </div>
-                  <RiskBadge level={loc.risk_level} />
+                  <span className="risk-badge" style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+                    {cfg.level.toUpperCase()}
+                  </span>
                 </div>
 
-                {/* Confidence */}
-                <div className="card-conf">
-                  <span style={{ fontSize: '1.25rem', fontWeight: 800, color: cfg.color }}>
-                    {(loc.confidence * 100).toFixed(1)}%
-                  </span>
-                  <span style={{ fontSize: '0.7rem', color: '#78716c' }}>confidence</span>
+                {/* Values Display */}
+                <div style={{ marginTop: 12, marginBottom: 8, display: 'flex', gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: cfg.color }}>
+                      {(loc.risk_score * 100).toFixed(1)}%
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: '#78716c', fontWeight: 600, textTransform: 'uppercase' }}>Risk Score</div>
+                  </div>
+                  <div style={{ paddingLeft: 16, borderLeft: '1px solid #e5e7eb' }}>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#334155' }}>
+                      {(loc.confidence * 100).toFixed(1)}%
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: '#78716c', fontWeight: 600, textTransform: 'uppercase' }}>Model Confidence</div>
+                  </div>
                 </div>
-                <ConfBar value={loc.confidence} color={cfg.color} />
+                <ConfBar value={loc.risk_score} color={cfg.color} />
 
                 {/* Gemini snippet */}
                 {loc.gemini_explanation && (

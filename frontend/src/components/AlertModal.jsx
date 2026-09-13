@@ -84,7 +84,7 @@ export default function AlertModal({ prediction, onDismiss }) {
           </div>
         </div>
 
-        {/* ─── Confidence big number ─── */}
+        {/* ─── Risk Score big number ─── */}
         <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
           <div style={{
             fontSize: '3rem',
@@ -93,10 +93,13 @@ export default function AlertModal({ prediction, onDismiss }) {
             lineHeight: 1,
             letterSpacing: '-0.02em',
           }}>
-            {formatConfidence(prediction.confidence)}
+            {formatConfidence(prediction.risk_score || 0)}
           </div>
           <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>
-            Model Confidence · {prediction.risk_level} Risk
+            Risk Score · {prediction.risk_level} Danger Level
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+            Model Confidence: {formatConfidence(prediction.confidence)}
           </div>
         </div>
 
@@ -109,7 +112,7 @@ export default function AlertModal({ prediction, onDismiss }) {
             }}>
               <Zap size={14} color="var(--color-text-secondary)" />
               <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Top Contributing Factors
+                SHAP Local Explainability
               </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

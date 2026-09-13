@@ -33,11 +33,15 @@ class FeatureValues(BaseModel):
     distance_to_construction_area: float
     historical_landslide_zone: int
     rainfall_intensity_mm: float
+    rainfall_last_3_days: float
+    rainfall_last_7_days: float
+    rainfall_last_15_days: float
     humidity: float
     temperature: float
     soil_moisture: float
     seismic_activity: float
     vibration_level: float  # Simulated — IoT sensor integration is future scope
+    population_density: int
 
 
 class PredictResponse(BaseModel):
@@ -48,6 +52,7 @@ class PredictResponse(BaseModel):
     risk_level: RiskLevel
     confidence: float = Field(..., ge=0.0, le=1.0)
     risk_score: float = Field(..., ge=0.0, le=1.0)
+    physics_fs: Optional[float] = None
     features: FeatureValues
     top_factors: List[Dict[str, Any]]  # [{name: str, importance: float}] sorted desc
     timestamp: datetime

@@ -28,6 +28,9 @@ def generate_dataset(n: int = N_SAMPLES) -> pd.DataFrame:
 
     # Slope angle (degrees) — NER is hilly; most landslides on 20-55° slopes
     slope_angle = np.random.gamma(shape=3.0, scale=9.0, size=n).clip(1, 70)
+    # Add 10% extreme steep slopes
+    extreme_steep_idx = np.random.choice(n, int(0.10 * n), replace=False)
+    slope_angle[extreme_steep_idx] = np.random.uniform(55, 80, size=len(extreme_steep_idx))
 
     # Elevation (meters) — NER ranges from plains (~50m) to Himalayan foothills (~3000m)
     elevation = np.random.gamma(shape=2.5, scale=400, size=n).clip(50, 3500)
@@ -48,6 +51,14 @@ def generate_dataset(n: int = N_SAMPLES) -> pd.DataFrame:
     # Rainfall intensity (mm/day) — monsoon season drives most landslides in NER
     # High rainfall is the #1 trigger in Meghalaya/Assam
     rainfall_intensity_mm = np.random.gamma(shape=1.8, scale=18, size=n).clip(0, 250)
+    # Add 10% extreme monsoon downpours
+    extreme_rain_idx = np.random.choice(n, int(0.10 * n), replace=False)
+    rainfall_intensity_mm[extreme_rain_idx] = np.random.uniform(150, 400, size=len(extreme_rain_idx))
+
+    # Antecedent rainfall (cumulative)
+    rainfall_last_3_days = rainfall_intensity_mm + np.random.gamma(shape=2.0, scale=30, size=n).clip(0, 300)
+    rainfall_last_7_days = rainfall_last_3_days + np.random.gamma(shape=2.0, scale=40, size=n).clip(0, 400)
+    rainfall_last_15_days = rainfall_last_7_days + np.random.gamma(shape=2.0, scale=50, size=n).clip(0, 600)
 
     # Humidity (%)
     humidity = np.random.normal(loc=78, scale=12, size=n).clip(30, 100)
@@ -76,6 +87,9 @@ def generate_dataset(n: int = N_SAMPLES) -> pd.DataFrame:
         "distance_to_construction_area": distance_to_construction_area,
         "historical_landslide_zone": historical_landslide_zone,
         "rainfall_intensity_mm": rainfall_intensity_mm,
+        "rainfall_last_3_days": rainfall_last_3_days,
+        "rainfall_last_7_days": rainfall_last_7_days,
+        "rainfall_last_15_days": rainfall_last_15_days,
         "humidity": humidity,
         "temperature": temperature,
         "soil_moisture": soil_moisture,
@@ -102,16 +116,18 @@ def generate_dataset(n: int = N_SAMPLES) -> pd.DataFrame:
     )
 
     risk_score = (
-        0.30 * np.clip(rainfall_intensity_mm / 150, 0, 1)    # Normalise to typical monsoon max (Increased weight)
-        + 0.20 * np.clip(slope_angle / 55, 0, 1)             # 55° is a realistic steep NER slope (Increased weight)
-        + 0.10 * soil_moisture                                # Already [0,1]
-        + 0.08 * (1 - vegetation_index)                      # Low NDVI = deforested = higher risk
-        + 0.08 * np.clip(seismic_activity / 4.5, 0, 1)       # NER typical M<4.5 events
-        + 0.08 * historical_landslide_zone
-        + 0.07 * np.clip(vibration_level / 7, 0, 1)          # Practical sensor max
-        + 0.04 * np.clip((humidity - 40) / 55, 0, 1)         # Meaningful range: 40-95%
-        + 0.03 * soil_penalty
-        + 0.01 * np.clip(1 - distance_to_mining_area / 40, 0, 1)     # Risk within 40km
+        0.15 * np.clip(rainfall_intensity_mm / 150, 0, 1)    # Current rainfall
+        + 0.10 * np.clip(rainfall_last_3_days / 300, 0, 1)   # 3-day antecedent
+        + 0.10 * np.clip(rainfall_last_15_days / 800, 0, 1)  # 15-day saturation
+        + 0.20 * np.clip(slope_angle / 55, 0, 1)             # Slope
+        + 0.10 * soil_moisture                               
+        + 0.05 * (1 - vegetation_index)                      
+        + 0.05 * np.clip(seismic_activity / 4.5, 0, 1)       
+        + 0.05 * historical_landslide_zone
+        + 0.05 * np.clip(vibration_level / 7, 0, 1)          
+        + 0.02 * np.clip((humidity - 40) / 55, 0, 1)         
+        + 0.10 * soil_penalty
+        + 0.02 * np.clip(1 - distance_to_mining_area / 40, 0, 1)     
         + 0.01 * np.clip(1 - distance_to_construction_area / 30, 0, 1)
     )
 
@@ -119,12 +135,13 @@ def generate_dataset(n: int = N_SAMPLES) -> pd.DataFrame:
     risk_score += np.random.normal(0, 0.03, n)
     risk_score = risk_score.clip(0, 1)
 
-    # --- Calibrated thresholds for realistic NER class distribution ---
-    # Target approximate split: Low ~25%, Medium ~45%, High ~20%, Critical ~10%
-    # Thresholds derived from percentile analysis of the score distribution.
-    risk_label = pd.cut(
+    # --- Calibrated thresholds for exact class balance ---
+    # We use qcut to guarantee exactly 25% of the data falls into each 
+    # of the 4 classes. This ensures the ML model does not overfit to a 
+    # majority class and learns distinct decision boundaries.
+    risk_label = pd.qcut(
         risk_score,
-        bins=[-np.inf, 0.30, 0.50, 0.70, np.inf],
+        q=[0, 0.25, 0.50, 0.75, 1.0],
         labels=["Low", "Medium", "High", "Critical"]
     )
 
@@ -142,8 +159,8 @@ if __name__ == "__main__":
     out_path = out_dir / "landslide_training_data.csv"
     df.to_csv(out_path, index=False)
     
-    print(f"✅ Generated {len(df)} training samples → {out_path}")
-    print("\n📊 Class Distribution:")
+    print(f"Generated {len(df)} training samples -> {out_path}")
+    print("\nClass Distribution:")
     print(df["risk_level"].value_counts().sort_index())
-    print("\n📈 Feature Statistics:")
+    print("\nFeature Statistics:")
     print(df.describe().round(2))

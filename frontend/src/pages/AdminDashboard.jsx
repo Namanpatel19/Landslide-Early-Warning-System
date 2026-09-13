@@ -7,10 +7,24 @@ import { Link } from 'react-router-dom';
 import { getReports, updateReportStatus, getAlerts } from '../services/api';
 import { ShieldCheck, XCircle, Clock, MapPin, Bell, ArrowLeft, RefreshCw, Eye, CheckCircle } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import AutoScannedGrid from '../components/AutoScannedGrid';
+import LocationDetailDrawer from '../components/LocationDetailDrawer';
+import { predictRisk } from '../services/api';
+import { getRiskDetails } from '../utils/helpers';
 
-const SEV_ORDER = { Critical: 0, High: 1, Medium: 2, Low: 3, Pending: 4 };
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const CRITICAL_CONFIDENCE_THRESHOLD = 0.90;
+
+const SEV_ORDER = { 
+  'Verified - Critical': 0, 'Verified - High': 1, 'Verified - Medium': 2, 'Verified - Low': 3, 
+  Critical: 4, High: 5, Medium: 6, Low: 7, 'Needs Manual Review': 8, Pending: 9 
+};
 const SEV_STYLE = {
+  'Verified - Critical': { bg: '#fef2f2', color: '#dc2626', border: '#fca5a5' },
+  'Verified - High':     { bg: '#fff7ed', color: '#ea580c', border: '#fdba74' },
+  'Verified - Medium':   { bg: '#fffbeb', color: '#d97706', border: '#fcd34d' },
+  'Verified - Low':      { bg: '#f0fdf4', color: '#16a34a', border: '#86efac' },
+  'Needs Manual Review': { bg: '#fefce8', color: '#ca8a04', border: '#fde047' },
   Critical: { bg: '#fef2f2', color: '#dc2626', border: '#fca5a5' },
   High:     { bg: '#fff7ed', color: '#ea580c', border: '#fdba74' },
   Medium:   { bg: '#fffbeb', color: '#d97706', border: '#fcd34d' },
@@ -48,11 +62,16 @@ export default function AdminDashboard() {
   const [reports, setReports]   = useState([]);
   const [alerts, setAlerts]     = useState([]);
   const [loading, setLoading]   = useState(true);
-  const [tab, setTab]           = useState('reports');
+  const [tab, setTab]           = useState('map'); // Default to map now
   const [refreshing, setRefreshing] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  // Map state
+  const [activePrediction, setActivePrediction] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mapLoading, setMapLoading] = useState(false);
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -67,11 +86,12 @@ export default function AdminDashboard() {
   const fetchAll = async () => {
     setRefreshing(true);
     try {
-      const [r, a] = await Promise.all([getReports(), getAlerts(100)]);
-      // Sort reports by severity
+      const [r, aRes] = await Promise.all([getReports(), getAlerts(100)]);
       const sorted = [...r].sort((a, b) => (SEV_ORDER[a.severity] ?? 5) - (SEV_ORDER[b.severity] ?? 5));
       setReports(sorted);
-      setAlerts(a);
+      
+      const alertsArray = Array.isArray(aRes) ? aRes : (aRes.alerts || []);
+      setAlerts(alertsArray);
     } catch (e) {
       console.error(e);
     } finally {
@@ -81,6 +101,24 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => { fetchAll(); }, []);
+
+  const handleLocationClick = async (lat, lon, preloadedData = null) => {
+    setDrawerOpen(true);
+    setMapLoading(true);
+    if (preloadedData) {
+      setActivePrediction(preloadedData);
+      setMapLoading(false);
+      return;
+    }
+    try {
+      const result = await predictRisk(lat, lon);
+      setActivePrediction(result);
+    } catch (err) {
+      console.error('Prediction failed:', err);
+    } finally {
+      setMapLoading(false);
+    }
+  };
 
   const handleStatus = async (id, status) => {
     try {
@@ -132,7 +170,7 @@ export default function AdminDashboard() {
           </form>
           <div style={{ marginTop: 24 }}>
             <Link to="/" className="portal-back" style={{ display: 'inline-flex', border: 'none' }}>
-              <ArrowLeft size={14} /> Back to Dashboard
+              <ArrowLeft size={14} /> Back to Citizen Portal
             </Link>
           </div>
         </div>
@@ -142,10 +180,9 @@ export default function AdminDashboard() {
 
   return (
     <div className="admin-page">
-      {/* Topbar */}
       <div className="portal-topbar">
         <Link to="/" className="portal-back">
-          <ArrowLeft size={16} /> Back to Dashboard
+          <ArrowLeft size={16} /> Back to Citizen Portal
         </Link>
         <div className="portal-logo">
           <img src="/logo.png" alt="LandWatch" style={{ width: 28, height: 28 }} />
@@ -157,7 +194,6 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* Authority Badge */}
       <div className="admin-hero">
         <ShieldCheck size={24} color="#16a34a" />
         <div>
@@ -193,8 +229,10 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Tab Nav */}
       <div className="admin-tabs">
+        <button className={`admin-tab ${tab === 'map' ? 'active' : ''}`} onClick={() => setTab('map')}>
+          <MapPin size={14} /> Live Risk Map
+        </button>
         <button className={`admin-tab ${tab === 'reports' ? 'active' : ''}`} onClick={() => setTab('reports')}>
           <Eye size={14} /> Public Reports ({reports.length})
         </button>
@@ -204,7 +242,19 @@ export default function AdminDashboard() {
       </div>
 
       <div className="admin-body">
-        {/* ── Reports Tab ─────────────────────────────────────────────────── */}
+        {tab === 'map' && (
+          <div style={{ position: 'relative' }}>
+            <AutoScannedGrid onLocationClick={handleLocationClick} />
+            {drawerOpen && (
+              <LocationDetailDrawer
+                prediction={activePrediction}
+                isLoading={mapLoading}
+                onClose={() => { setDrawerOpen(false); setActivePrediction(null); }}
+              />
+            )}
+          </div>
+        )}
+
         {tab === 'reports' && (
           <div>
             {loading ? (
@@ -277,7 +327,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* ── Alerts Tab ──────────────────────────────────────────────────── */}
         {tab === 'alerts' && (
           <div>
             {alerts.length === 0 ? (
@@ -287,21 +336,26 @@ export default function AdminDashboard() {
               </div>
             ) : (
               alerts.map(alert => {
-                const sev = SEV_STYLE[alert.risk_level] || SEV_STYLE.Pending;
+                const cfg = getRiskDetails(alert.risk_score || 0);
                 return (
-                  <div key={alert.id} className="alert-row" style={{ borderLeft: `4px solid ${sev.color}` }}>
+                  <div key={alert.id} className="alert-row" style={{ borderLeft: `4px solid ${cfg.color}` }}>
                     <div style={{ flex: 1 }}>
                       <div className="alert-row-name">
-                        <MapPin size={13} style={{ color: sev.color }} />
+                        <MapPin size={13} style={{ color: cfg.color }} />
                         {alert.location_name}
                       </div>
                       <div className="alert-row-meta">
-                        {alert.risk_level} Risk · {(alert.confidence * 100).toFixed(1)}% confidence
+                        {cfg.level} Risk · {(alert.risk_score * 100).toFixed(1)}% score · {(alert.confidence * 100).toFixed(1)}% confidence
                         {' · '}{new Date(alert.timestamp).toLocaleString()}
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-                      <SevBadge severity={alert.risk_level} />
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                        background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
+                      }}>
+                        {cfg.level.toUpperCase()}
+                      </span>
                       <button 
                         className="action-btn" 
                         style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', padding: '4px 8px', fontSize: 10, width: 'auto' }}

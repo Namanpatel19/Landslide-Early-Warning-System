@@ -149,6 +149,11 @@ def fetch_geo_features(lat: float, lon: float) -> dict:
     mining_dist = max(0.5, rng.expovariate(1.0 / region["mining_dist_mean"]))
     construction_dist = max(0.5, rng.expovariate(1.0 / region["construction_dist_mean"]))
 
+    # Simulate Population Density (Proxy for WorldPop API or actual API fallback)
+    # NER has scattered villages and some dense valleys.
+    # We correlate it loosely with construction distance for realism.
+    pop_density = max(10, min(5000, rng.gauss(500, 200) * (30 / max(1, construction_dist))))
+
     result = {
         "soil_type": soil_type,
         "slope_angle": round(slope, 2),
@@ -158,6 +163,7 @@ def fetch_geo_features(lat: float, lon: float) -> dict:
         "distance_to_construction_area": round(min(construction_dist, 60.0), 2),
         "historical_landslide_zone": historical_zone,
         "region_name": region["name"],
+        "population_density": int(pop_density),
     }
 
     geo_cache.set(cache_key, result)

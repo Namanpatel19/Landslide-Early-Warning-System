@@ -9,19 +9,11 @@
 
 import React, { useRef, useEffect, useCallback } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup, useMapEvents } from 'react-leaflet';
-import { formatConfidence, formatDateTime } from '../utils/helpers';
+import { formatConfidence, formatDateTime, getRiskDetails } from '../utils/helpers';
 
 // NER bounds for map view
 const NER_CENTER = [26.2, 92.5];
 const NER_ZOOM = 7;
-
-// Risk color mapping for markers
-const RISK_COLORS = {
-  Low: '#16a34a',
-  Medium: '#d97706',
-  High: '#ea580c',
-  Critical: '#dc2626',
-};
 
 /**
  * MapClickHandler — invisible component that captures map click events.
@@ -112,9 +104,10 @@ export default function Map({ predictions, onLocationClick, isLoading }) {
 
         {/* Render all prediction markers */}
         {predictions.map((pred, idx) => {
-          const color = RISK_COLORS[pred.risk_level] || '#94a3b8';
-          const isCritical = pred.risk_level === 'Critical';
-          const isHigh = pred.risk_level === 'High';
+          const cfg = getRiskDetails(pred.risk_score || 0);
+          const color = cfg.color;
+          const isCritical = cfg.level === 'Critical';
+          const isHigh = cfg.level === 'High';
           return (
             <CircleMarker
               key={idx}
@@ -143,7 +136,7 @@ export default function Map({ predictions, onLocationClick, isLoading }) {
                       background: color,
                     }} />
                     <strong style={{ color, fontSize: '0.9375rem' }}>
-                      {pred.risk_level} Risk
+                      {cfg.level} Risk
                     </strong>
                   </div>
 
@@ -152,10 +145,14 @@ export default function Map({ predictions, onLocationClick, isLoading }) {
                     📍 {pred.location_name?.split('(')[0]?.trim()}
                   </div>
 
-                  {/* Confidence */}
+                  {/* Risk Score & Confidence */}
                   <div style={{ fontSize: '0.8125rem', marginBottom: '0.25rem' }}>
-                    <span style={{ color: '#6b7280' }}>Confidence: </span>
-                    <strong style={{ color }}>{formatConfidence(pred.confidence)}</strong>
+                    <span style={{ color: '#6b7280' }}>Risk Score: </span>
+                    <strong style={{ color }}>{formatConfidence(pred.risk_score || 0)}</strong>
+                  </div>
+                  <div style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>
+                    <span style={{ color: '#9ca3af' }}>Confidence: </span>
+                    <span style={{ color: '#6b7280' }}>{formatConfidence(pred.confidence)}</span>
                   </div>
 
                   {/* Key metrics */}
@@ -200,12 +197,16 @@ export default function Map({ predictions, onLocationClick, isLoading }) {
         <div style={{ fontWeight: 700, marginBottom: '0.375rem', color: 'var(--color-text-secondary)' }}>
           RISK LEVEL
         </div>
-        {Object.entries(RISK_COLORS).map(([level, color]) => (
-          <div key={level} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: 2 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, display: 'inline-block' }} />
-            <span style={{ color: 'var(--color-text)' }}>{level}</span>
-          </div>
-        ))}
+        {['Critical', 'High', 'Medium', 'Low'].map((level) => {
+          const mockScore = { Critical: 1.0, High: 0.80, Medium: 0.50, Low: 0.20 };
+          const color = getRiskDetails(mockScore[level]).color;
+          return (
+            <div key={level} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: 2 }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, display: 'inline-block' }} />
+              <span style={{ color: 'var(--color-text)' }}>{level}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

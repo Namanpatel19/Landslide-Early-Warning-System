@@ -47,7 +47,8 @@ async def fetch_current_weather(lat: float, lon: float) -> dict:
             "temperature_2m",
             "soil_moisture_0_to_1cm",
         ],
-        "hourly": "precipitation",
+        "daily": ["precipitation_sum"],
+        "past_days": 15,
         "forecast_days": 1,
         "timezone": "Asia/Kolkata",
     }
@@ -59,11 +60,24 @@ async def fetch_current_weather(lat: float, lon: float) -> dict:
             data = resp.json()
 
         current = data.get("current", {})
+        daily_rain = data.get("daily", {}).get("precipitation_sum", [])
+        
+        # Calculate antecedent rainfall (exclude today which is the last element in daily_rain if forecast_days=1, 
+        # actually past_days=15 + forecast=1 means 16 elements. The last one is today.
+        past_rain = daily_rain[:-1] if len(daily_rain) > 15 else daily_rain
+        
+        rain_3d = sum([r for r in past_rain[-3:] if r is not None]) if len(past_rain) >= 3 else 0.0
+        rain_7d = sum([r for r in past_rain[-7:] if r is not None]) if len(past_rain) >= 7 else 0.0
+        rain_15d = sum([r for r in past_rain[-15:] if r is not None]) if len(past_rain) >= 15 else 0.0
+
         result = {
             "rainfall_intensity_mm": current.get("precipitation", 0.0) * 24,  # mm/hour → mm/day approx
             "humidity": current.get("relative_humidity_2m", 70.0),
             "temperature": current.get("temperature_2m", 22.0),
             "soil_moisture": current.get("soil_moisture_0_to_1cm", 0.3),
+            "rainfall_last_3_days": rain_3d,
+            "rainfall_last_7_days": rain_7d,
+            "rainfall_last_15_days": rain_15d,
             "cached": False,
         }
 
@@ -83,6 +97,9 @@ async def fetch_current_weather(lat: float, lon: float) -> dict:
             "humidity": 82.0,
             "temperature": 24.0,
             "soil_moisture": 0.55,
+            "rainfall_last_3_days": 120.0,
+            "rainfall_last_7_days": 250.0,
+            "rainfall_last_15_days": 400.0,
             "cached": False,
         }
 

@@ -31,13 +31,29 @@ _feature_names = None
 _feature_importances: dict = {}
 
 
+import math
+import shap
+
+# Initialize SHAP explainer once
+_explainer = None
+
+def is_model_loaded() -> bool:
+    """Returns True if the ML model is currently loaded in memory."""
+    global _clf
+    return _clf is not None
+
+def _simulate_vibration() -> float:
+    """Simulate a vibration level (e.g. between 0.0 and 0.5) if IoT sensors are unavailable."""
+    import random
+    return round(random.uniform(0.0, 0.5), 2)
+
 def load_model() -> bool:
     """
     Load all model artifacts from disk.
     Called once at FastAPI startup.
     Returns True if successful, False if models not found (needs training).
     """
-    global _clf, _scaler, _label_encoder, _ordinal_encoder, _feature_names, _feature_importances
+    global _clf, _scaler, _label_encoder, _ordinal_encoder, _feature_names, _feature_importances, _explainer
 
     required_files = ["model.pkl", "scaler.pkl", "label_encoder.pkl",
                       "ordinal_encoder.pkl", "feature_names.pkl"]
@@ -58,25 +74,56 @@ def load_model() -> bool:
         with open(importance_file) as f:
             _feature_importances = json.load(f)
 
+    # Initialize SHAP Explainer
+    # TreeExplainer is extremely fast for Random Forest
+    try:
+        _explainer = shap.TreeExplainer(_clf)
+    except Exception as e:
+        logger.error(f"Could not initialize SHAP explainer: {e}")
+
     logger.info(f"✅ Model loaded: {_clf.__class__.__name__} with "
                 f"{_clf.n_estimators} estimators")
     return True
 
-
-def is_model_loaded() -> bool:
-    return _clf is not None
-
-
-def _simulate_vibration() -> float:
+def calculate_fs(slope_angle_deg, soil_type, soil_moisture, rainfall_last_15_days):
     """
-    Simulate IoT vibration sensor reading.
-    NOTE: In production, this would be a real-time reading from
-    LoRa/GSM-connected accelerometers deployed on hillsides.
-    Future scope: Integrate with IoT platform (AWS IoT / Thingsboard).
+    Infinite slope Factor of Safety (FS) approximation.
     """
-    # Realistic distribution: mostly low vibration with occasional spikes
-    return round(np.random.exponential(scale=1.5), 2)
-
+    # Standard properties
+    soil_props = {
+        "rocky": {"c": 50, "phi": 35, "gamma": 22},
+        "sandy_loam": {"c": 10, "phi": 30, "gamma": 18},
+        "loam": {"c": 15, "phi": 28, "gamma": 17},
+        "laterite": {"c": 25, "phi": 32, "gamma": 19},
+        "silt": {"c": 5, "phi": 25, "gamma": 16},
+        "clay": {"c": 20, "phi": 20, "gamma": 16},
+    }
+    props = soil_props.get(soil_type, soil_props["loam"])
+    c = props["c"]
+    phi = math.radians(props["phi"])
+    gamma_s = props["gamma"]
+    gamma_w = 9.81
+    
+    z = 2.0 # Assume 2m soil depth
+    
+    # Estimate water table depth 'h' (0 to 2m) based on soil moisture and 15d rainfall saturation
+    saturation = min(1.0, soil_moisture + (rainfall_last_15_days / 600.0))
+    h = z * saturation
+    
+    beta = math.radians(slope_angle_deg)
+    
+    if beta < 0.05:
+        return 10.0 # Stable
+        
+    # Formula: FS = [ c + (gamma_s * z - gamma_w * h) * cos^2(beta) * tan(phi) ] / [ gamma_s * z * sin(beta) * cos(beta) ]
+    numerator = c + (gamma_s * z - gamma_w * h) * (math.cos(beta)**2) * math.tan(phi)
+    denominator = gamma_s * z * math.sin(beta) * math.cos(beta)
+    
+    if denominator <= 0:
+        return 10.0
+        
+    fs = numerator / denominator
+    return max(0.1, min(10.0, fs))
 
 def build_feature_vector(
     soil_type: str,
@@ -87,6 +134,9 @@ def build_feature_vector(
     distance_to_construction_area: float,
     historical_landslide_zone: int,
     rainfall_intensity_mm: float,
+    rainfall_last_3_days: float,
+    rainfall_last_7_days: float,
+    rainfall_last_15_days: float,
     humidity: float,
     temperature: float,
     soil_moisture: float,
@@ -111,6 +161,9 @@ def build_feature_vector(
         distance_to_construction_area,
         float(historical_landslide_zone),
         rainfall_intensity_mm,
+        rainfall_last_3_days,
+        rainfall_last_7_days,
+        rainfall_last_15_days,
         humidity,
         temperature,
         soil_moisture,
@@ -123,20 +176,7 @@ def build_feature_vector(
     X_scaled = _scaler.transform(X)
     return X_scaled, vibration_level
 
-
 def predict(features: dict) -> dict:
-    """
-    Run inference and return risk level, confidence, score, and top factors.
-    
-    Returns:
-        {
-            risk_level: str,
-            confidence: float,
-            risk_score: float,
-            top_factors: [{name, importance}],
-            vibration_level: float
-        }
-    """
     if not is_model_loaded():
         raise RuntimeError("Model not loaded. Run train_model.py first.")
 
@@ -149,6 +189,9 @@ def predict(features: dict) -> dict:
         distance_to_construction_area=features["distance_to_construction_area"],
         historical_landslide_zone=features["historical_landslide_zone"],
         rainfall_intensity_mm=features["rainfall_intensity_mm"],
+        rainfall_last_3_days=features.get("rainfall_last_3_days", 0.0),
+        rainfall_last_7_days=features.get("rainfall_last_7_days", 0.0),
+        rainfall_last_15_days=features.get("rainfall_last_15_days", 0.0),
         humidity=features["humidity"],
         temperature=features["temperature"],
         soil_moisture=features["soil_moisture"],
@@ -157,33 +200,73 @@ def predict(features: dict) -> dict:
     )
 
     # --- Fast inference (<1ms for RandomForest) ---
-    proba = _clf.predict_proba(X_scaled)[0]          # shape: (n_trained_classes,)
+    proba = _clf.predict_proba(X_scaled)[0]
     predicted_class_idx = int(np.argmax(proba))
     confidence = float(proba[predicted_class_idx])
 
-    # clf.classes_ holds the integer class labels the model was actually trained on
-    # (may be [0,1,2] if Critical was absent from training data, not [0,1,2,3])
-    trained_class_ints = _clf.classes_               # e.g. [0, 1, 2] or [0, 1, 2, 3]
+    trained_class_ints = _clf.classes_
+    full_severity = {0: 0.0, 1: 0.33, 2: 0.67, 3: 1.0}
+    ml_risk_score = float(np.dot(proba, np.array([full_severity[int(c)] for c in trained_class_ints])))
 
-    # Map predicted integer back to risk label string
-    full_severity = {0: 0.0, 1: 0.33, 2: 0.67, 3: 1.0}  # Low→0, Med→0.33, High→0.67, Crit→1.0
-    risk_level = RISK_ORDER[trained_class_ints[predicted_class_idx]]
+    # Physics-Based Factor of Safety (FS)
+    fs = calculate_fs(
+        slope_angle_deg=features["slope_angle"],
+        soil_type=features["soil_type"],
+        soil_moisture=features["soil_moisture"],
+        rainfall_last_15_days=features.get("rainfall_last_15_days", 0.0)
+    )
+    
+    # Map FS to physics_risk score [0, 1]
+    # If FS <= 1.0 -> 1.0 (Critical)
+    # If FS >= 2.0 -> 0.0 (Safe)
+    physics_risk = np.clip(2.0 - fs, 0.0, 1.0)
+    
+    # Hybrid Risk Score
+    risk_score = 0.7 * ml_risk_score + 0.3 * physics_risk
+    
+    # Determine risk level based on hybrid score
+    if risk_score >= 0.86:
+        risk_level = "Critical"
+    elif risk_score >= 0.66:
+        risk_level = "High"
+    elif risk_score >= 0.41:
+        risk_level = "Medium"
+    else:
+        risk_level = "Low"
 
-    # Composite risk score: dot product of class probabilities × severity weights
-    # Build severity_weights aligned to trained_class_ints (not hardcoded to 4)
-    severity_weights = np.array([full_severity[int(c)] for c in trained_class_ints])
-    risk_score = float(np.dot(proba, severity_weights))
-
-    # Top contributing factors from global feature importance
-    top_factors = [
-        {"name": k, "importance": round(v, 4)}
-        for k, v in list(_feature_importances.items())[:6]
-    ]
+    # Explainability with SHAP
+    top_factors = []
+    if _explainer:
+        try:
+            shap_vals = _explainer.shap_values(X_scaled)
+            # shap_vals is a list of arrays (one per class). We take the values for the predicted class.
+            class_shap = shap_vals[predicted_class_idx][0]
+            
+            # Pair feature names with their local SHAP importance
+            feat_impact = []
+            for i, feat_name in enumerate(_feature_names):
+                val = class_shap[i]
+                if abs(val) > 0.001:
+                    feat_impact.append({"name": feat_name, "importance": round(val, 4)})
+                    
+            # Sort by absolute impact magnitude
+            feat_impact.sort(key=lambda x: abs(x["importance"]), reverse=True)
+            top_factors = feat_impact[:6]
+        except Exception as e:
+            logger.warning(f"SHAP explanation failed: {e}")
+            
+    # Fallback to global importance if SHAP fails or is empty
+    if not top_factors:
+        top_factors = [
+            {"name": k, "importance": round(v, 4)}
+            for k, v in list(_feature_importances.items())[:6]
+        ]
 
     return {
         "risk_level": risk_level,
         "confidence": confidence,
         "risk_score": risk_score,
+        "physics_fs": round(fs, 2),
         "top_factors": top_factors,
         "vibration_level": vibration_level,
     }

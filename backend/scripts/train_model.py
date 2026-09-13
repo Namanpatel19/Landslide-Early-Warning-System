@@ -47,6 +47,7 @@ NUMERIC_FEATURES = [
     "slope_angle", "elevation", "vegetation_index",
     "distance_to_mining_area", "distance_to_construction_area",
     "historical_landslide_zone", "rainfall_intensity_mm",
+    "rainfall_last_3_days", "rainfall_last_7_days", "rainfall_last_15_days",
     "humidity", "temperature", "soil_moisture",
     "seismic_activity", "vibration_level",
 ]

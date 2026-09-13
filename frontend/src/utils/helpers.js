@@ -1,27 +1,19 @@
 /**
- * useRiskColor — Returns color tokens for a given risk level.
+ * getRiskDetails — Returns level, color, bg, border based STRICTLY on risk score (0-1).
+ * 0-40% -> Low
+ * 41-65% -> Medium
+ * 66-85% -> High
+ * 86-100% -> Critical
  */
-export function useRiskColor(riskLevel) {
-  const map = {
-    Low:      { color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
-    Medium:   { color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
-    High:     { color: '#ea580c', bg: '#fff7ed', border: '#fed7aa' },
-    Critical: { color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
-  };
-  return map[riskLevel] || map['Low'];
-}
-
-/**
- * getRiskDotColor — Returns the Leaflet marker color for risk level.
- */
-export function getRiskDotColor(riskLevel) {
-  const map = {
-    Low: '#16a34a',
-    Medium: '#d97706',
-    High: '#ea580c',
-    Critical: '#dc2626',
-  };
-  return map[riskLevel] || '#94a3b8';
+export function getRiskDetails(riskScore) {
+  // If undefined or invalid, default to Low
+  if (typeof riskScore !== 'number') return { level: 'Pending', color: '#6b7280', bg: '#f9fafb', border: '#e5e7eb' };
+  
+  const pct = Math.round(riskScore * 100);
+  if (pct <= 40) return { level: 'Low',      color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' };
+  if (pct <= 65) return { level: 'Medium',   color: '#d97706', bg: '#fffbeb', border: '#fde68a' };
+  if (pct <= 85) return { level: 'High',     color: '#ea580c', bg: '#fff7ed', border: '#fed7aa' };
+  return                { level: 'Critical', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' };
 }
 
 /**

@@ -7,10 +7,11 @@ export default function GlobalAlertModal({ locations }) {
 
   useEffect(() => {
     // Find the first location with Critical risk AND > 90% confidence that hasn't been dismissed
+    // Actually, trigger based on Critical risk score (>= 0.86)
     if (!locations || locations.length === 0) return;
     
     const criticalLocation = locations.find(
-      loc => loc.risk_level === 'Critical' && loc.confidence > 0.90 && !dismissedIds.has(loc.id)
+      loc => loc.risk_score >= 0.86 && loc.confidence > 0.90 && !dismissedIds.has(loc.id)
     );
 
     if (criticalLocation) {
@@ -70,7 +71,7 @@ export default function GlobalAlertModal({ locations }) {
         </div>
         
         <p style={{ fontSize: 15, color: '#4b5563', marginBottom: 24, lineHeight: 1.6 }}>
-          The AI model has detected an imminent landslide threat with <strong>{(activeAlert.confidence * 100).toFixed(1)}% confidence</strong>. 
+          The AI model has detected an imminent landslide threat with a <strong>{(activeAlert.risk_score * 100).toFixed(1)}% Risk Score</strong> and <strong>{(activeAlert.confidence * 100).toFixed(1)}% Confidence</strong>. 
           Authorities must take immediate preventative action.
         </p>
 

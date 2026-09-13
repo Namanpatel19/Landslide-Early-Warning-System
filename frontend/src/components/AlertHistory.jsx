@@ -4,10 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { Bell, Clock, CheckCircle2, RefreshCw } from 'lucide-react';
 import { getAlerts } from '../services/api';
-
-const RISK_COLORS = {
-  Critical: '#dc2626', High: '#ea580c', Medium: '#d97706', Low: '#16a34a',
-};
+import { getRiskDetails } from '../utils/helpers';
 
 function timeAgo(ts) {
   if (!ts) return '';
@@ -65,20 +62,20 @@ export default function AlertHistory({ refreshTrigger }) {
           </div>
         ) : (
           alerts.map(alert => {
-            const color = RISK_COLORS[alert.risk_level] || '#94a3b8';
+            const cfg = getRiskDetails(alert.risk_score || 0);
             return (
               <div key={alert.id} className="alert-item">
-                <div className="alert-dot" style={{ background: color }} />
+                <div className="alert-dot" style={{ background: cfg.color }} />
                 <div>
-                  <div className="alert-item-name" style={{ color }}>
-                    {alert.risk_level} Risk
+                  <div className="alert-item-name" style={{ color: cfg.color }}>
+                    {cfg.level} Risk
                   </div>
                   <div className="alert-item-meta">
                     {alert.location_name?.split('(')[0]?.trim()}
                   </div>
                   <div className="alert-item-meta" style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                     <Clock size={10} />
-                    {timeAgo(alert.timestamp)} · {(alert.confidence * 100).toFixed(0)}%
+                    {timeAgo(alert.timestamp)} · {(alert.risk_score * 100).toFixed(0)}% Score · {(alert.confidence * 100).toFixed(0)}% Conf
                     {alert.notified && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: 2, color: '#16a34a', marginLeft: 4 }}>
                         <CheckCircle2 size={10} /> Notified

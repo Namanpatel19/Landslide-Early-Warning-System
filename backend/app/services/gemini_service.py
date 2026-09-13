@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 if settings.has_gemini:
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
     # We use gemini-1.5-flash for speed and multimodal capabilities
-    _model = genai.GenerativeModel('gemini-2.0-flash')
+    _model = genai.GenerativeModel('gemini-3.6-flash')
 else:
     _model = None
 
@@ -48,7 +48,7 @@ async def generate_risk_explanation(features: Dict[str, Any], risk_level: str, c
         logger.error(f"Gemini API error during explanation generation: {e}")
         return None
 
-async def analyze_landslide_image(image_path: str) -> Dict[str, Any]:
+async def analyze_landslide_image(image_path: str, language: str = "English") -> Dict[str, Any]:
     """
     Analyzes an uploaded photo for visual signs of landslide risk (cracks, erosion).
     Returns a JSON structure with analysis and severity.
@@ -64,7 +64,7 @@ async def analyze_landslide_image(image_path: str) -> Dict[str, Any]:
         logger.error(f"Could not open image for Gemini analysis: {e}")
         return {"error": "Invalid image file", "severity": "Pending"}
         
-    prompt = """
+    prompt = f"""
     Analyze this image for signs of potential landslide risk or land instability.
     Look for:
     1. Soil cracks or fissures
@@ -73,7 +73,7 @@ async def analyze_landslide_image(image_path: str) -> Dict[str, Any]:
     4. Debris accumulation or fallen rocks
     
     Return ONLY a valid JSON object with exactly these two keys:
-    "analysis": A 1-2 sentence description of what you see regarding land stability.
+    "analysis": A 1-2 sentence description of what you see regarding land stability. MUST BE TRANSLATED TO {language}.
     "severity": One of these exact strings based on visual evidence: "Low", "Medium", "High", "Critical". If no risk is visible, use "Low".
     """
     

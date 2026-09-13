@@ -3,7 +3,7 @@
  * Tourists and citizens can upload concern photos only.
  * No admin data is exposed here.
  */
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Camera, Upload, MapPin, CheckCircle, AlertCircle, X, ArrowLeft } from 'lucide-react';
 import { uploadReport } from '../services/api';
@@ -18,6 +18,47 @@ export default function CitizenPortal() {
   const [result, setResult]         = useState(null);
   const [error, setError]           = useState(null);
   const fileRef = useRef();
+
+  const [language, setLanguage]     = useState('English');
+  const [offlineSyncing, setOfflineSyncing] = useState(false);
+
+  useEffect(() => {
+    // Attempt sync when coming online
+    const handleOnline = () => syncOfflineReports();
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
+
+  async function syncOfflineReports() {
+    const reports = JSON.parse(localStorage.getItem('offline_reports') || '[]');
+    if (reports.length === 0) return;
+    
+    setOfflineSyncing(true);
+    const remaining = [];
+    for (const report of reports) {
+      try {
+        // Convert base64 back to blob
+        const res = await fetch(report.image);
+        const blob = await res.blob();
+        
+        const fd = new FormData();
+        fd.append('image', blob, 'offline-upload.jpg');
+        if (report.lat) fd.append('lat', report.lat);
+        if (report.lon) fd.append('lon', report.lon);
+        fd.append('location_name', report.location_name);
+        fd.append('language', report.language || 'English');
+        
+        await uploadReport(fd);
+      } catch (err) {
+        remaining.push(report);
+      }
+    }
+    localStorage.setItem('offline_reports', JSON.stringify(remaining));
+    setOfflineSyncing(false);
+    if (remaining.length === 0) {
+      alert("All offline reports have been synced successfully!");
+    }
+  };
 
   const handleFile = (e) => {
     const file = e.target.files[0];
@@ -40,6 +81,35 @@ export default function CitizenPortal() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!image) { setError('Please select an image first.'); return; }
+    
+    if (!navigator.onLine) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const offlineReports = JSON.parse(localStorage.getItem('offline_reports') || '[]');
+        offlineReports.push({
+          image: reader.result,
+          lat: manualLat,
+          lon: manualLon,
+          location_name: locationName || 'Unknown Location',
+          language: language
+        });
+        localStorage.setItem('offline_reports', JSON.stringify(offlineReports));
+        setResult({
+          severity: 'Pending',
+          gemini_analysis: 'Offline mode: Report saved to device. It will automatically upload when internet is restored.',
+          location_name: locationName || 'Unknown Location',
+          has_exif_gps: !!(manualLat)
+        });
+        setImage(null);
+        setPreview(null);
+        setManualLat('');
+        setManualLon('');
+        setLocationName('');
+      };
+      reader.readAsDataURL(image);
+      return;
+    }
+
     setUploading(true);
     setError(null);
 
@@ -48,6 +118,7 @@ export default function CitizenPortal() {
     if (manualLat) formData.append('lat', manualLat);
     if (manualLon) formData.append('lon', manualLon);
     formData.append('location_name', locationName || 'Unknown Location');
+    formData.append('language', language);
 
     try {
       const data = await uploadReport(formData);
@@ -69,14 +140,14 @@ export default function CitizenPortal() {
   return (
     <div className="portal-page">
       {/* Header */}
-      <div className="portal-topbar">
-        <Link to="/" className="portal-back">
-          <ArrowLeft size={16} /> Back to Dashboard
-        </Link>
+      <div className="portal-topbar" style={{ justifyContent: 'space-between' }}>
         <div className="portal-logo">
           <img src="/logo.png" alt="LandWatch" style={{ width: 28, height: 28 }} />
           <span>LandWatch <strong>NER</strong></span>
         </div>
+        <Link to="/admin" className="portal-back" style={{ background: '#f8fafc', color: '#16a34a', border: '1px solid #bbf7d0' }}>
+          Authority Portal
+        </Link>
       </div>
 
       <div className="portal-hero">
@@ -210,7 +281,7 @@ export default function CitizenPortal() {
               </div>
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
               <label className="form-label">Location Name (Optional)</label>
               <input
                 type="text"
@@ -221,9 +292,30 @@ export default function CitizenPortal() {
               />
             </div>
 
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label className="form-label">Preferred Response Language</label>
+              <select
+                value={language}
+                onChange={e => setLanguage(e.target.value)}
+                className="form-input"
+                style={{ appearance: 'auto' }}
+              >
+                <option value="English">English</option>
+                <option value="Hindi">Hindi (हिन्दी)</option>
+                <option value="Assamese">Assamese (অসমীয়া)</option>
+                <option value="Bengali">Bengali (বাংলা)</option>
+              </select>
+            </div>
+
             {error && (
               <div className="form-error">
                 <AlertCircle size={15} /> {error}
+              </div>
+            )}
+
+            {!navigator.onLine && (
+              <div className="form-error" style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fef3c7', marginBottom: '1rem' }}>
+                <AlertCircle size={15} color="#d97706" /> You are currently offline. Reports will be saved locally.
               </div>
             )}
 
@@ -238,9 +330,21 @@ export default function CitizenPortal() {
         )}
       </div>
 
-      <div className="portal-footer">
-        This service is provided by the LandWatch NER Early Warning System for Northeast India.
-        For emergencies, contact local disaster management authorities immediately.
+      <div className="portal-footer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+        <div>
+          This service is provided by the LandWatch NER Early Warning System for Northeast India.
+          For emergencies, contact local disaster management authorities immediately.
+        </div>
+        
+        {JSON.parse(localStorage.getItem('offline_reports') || '[]').length > 0 && navigator.onLine && (
+          <button 
+            onClick={syncOfflineReports} 
+            disabled={offlineSyncing}
+            style={{ padding: '6px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
+          >
+            {offlineSyncing ? 'Syncing...' : 'Sync Offline Reports'}
+          </button>
+        )}
       </div>
     </div>
   );

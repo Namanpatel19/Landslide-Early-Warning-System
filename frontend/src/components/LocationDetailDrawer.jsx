@@ -4,22 +4,16 @@
  */
 import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
-import { X, MapPin, Brain, TrendingUp, Droplets, Activity, Thermometer, Wind } from 'lucide-react';
+import { X, MapPin, Brain, TrendingUp, Droplets, Activity, Thermometer, Wind, AlertTriangle, Users } from 'lucide-react';
 import RainfallChart from './RainfallChart';
-
-const RISK_COLORS = {
-  Low: '#16a34a',
-  Medium: '#d97706',
-  High: '#ea580c',
-  Critical: '#dc2626',
-};
+import { getRiskDetails } from '../utils/helpers';
 
 function MetricRow({ icon, label, value }) {
   return (
-    <div className="metric-row">
-      <span className="metric-icon">{icon}</span>
-      <span className="metric-label">{label}</span>
-      <span className="metric-value">{value}</span>
+    <div className="drawer-metric-row">
+      <span className="drawer-metric-icon">{icon}</span>
+      <span className="drawer-metric-label">{label}</span>
+      <span className="drawer-metric-value">{value}</span>
     </div>
   );
 }
@@ -32,7 +26,9 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const color = RISK_COLORS[prediction?.risk_level] || '#94a3b8';
+  const riskScore = prediction?.risk_score ?? 0;
+  const cfg = getRiskDetails(riskScore);
+  const color = cfg.color;
   const f = prediction?.features;
 
   return (
@@ -41,8 +37,8 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
         {/* Header */}
         <div className="drawer-header" style={{ borderLeft: `4px solid ${color}` }}>
           <div>
-            <div className="drawer-risk-badge" style={{ background: color + '22', color }}>
-              {prediction?.risk_level} Risk — {prediction ? (prediction.confidence * 100).toFixed(1) : '--'}% confidence
+            <div className="drawer-risk-badge" style={{ background: cfg.bg, color: color, border: `1px solid ${cfg.border}` }}>
+              Risk Level: {cfg.level} ({(riskScore * 100).toFixed(1)}% score) · Model Confidence: {prediction ? (prediction.confidence * 100).toFixed(1) : '--'}%
             </div>
             <h2 className="drawer-title">{prediction?.location_name || 'Loading…'}</h2>
             {prediction && (
@@ -86,7 +82,7 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
                 >
                   <Popup>
                     <strong>{prediction.location_name}</strong><br />
-                    {prediction.risk_level} Risk — {(prediction.confidence * 100).toFixed(1)}%
+                    {cfg.level} Risk — {(riskScore * 100).toFixed(1)}% score
                   </Popup>
                 </CircleMarker>
               </MapContainer>
@@ -108,7 +104,7 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
                 <div className="drawer-section-title">
                   <Activity size={14} /> Live Conditions
                 </div>
-                <div className="metrics-grid">
+                <div className="drawer-metrics-grid">
                   <MetricRow
                     icon={<Droplets size={14} color="#3b82f6" />}
                     label="Rainfall"
@@ -139,25 +135,126 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
                     label="Slope Angle"
                     value={`${f.slope_angle?.toFixed(1)}°`}
                   />
+                  {f.population_density !== undefined && (
+                    <MetricRow
+                      icon={<Users size={14} color="#8b5cf6" />}
+                      label="Pop. Density"
+                      value={`${f.population_density} /km²`}
+                    />
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Confidence Bar */}
+            {/* Risk Score & Confidence Bars */}
             <div className="drawer-section">
               <div className="drawer-section-title">
-                <TrendingUp size={14} /> Model Confidence
+                <AlertTriangle size={14} /> Risk Assessment
               </div>
-              <div className="conf-bar-track">
-                <div
-                  className="conf-bar-fill"
-                  style={{ width: `${(prediction.confidence * 100).toFixed(1)}%`, background: color }}
-                />
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                  <span>Final Risk Score (Hybrid)</span>
+                  <span style={{ color }}>{(riskScore * 100).toFixed(1)}%</span>
+                </div>
+                <div className="conf-bar-track">
+                  <div
+                    className="conf-bar-fill"
+                    style={{ width: `${(riskScore * 100).toFixed(1)}%`, background: color }}
+                  />
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#6b7280', marginTop: 4 }}>
-                <span>0%</span>
-                <span style={{ fontWeight: 700, color }}>{(prediction.confidence * 100).toFixed(1)}%</span>
-                <span>100%</span>
+
+              {prediction.physics_fs !== undefined && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                    <span>Geotechnical Factor of Safety (FS)</span>
+                    <span style={{ color: prediction.physics_fs < 1.0 ? '#dc2626' : (prediction.physics_fs > 1.5 ? '#16a34a' : '#ea580c') }}>
+                      {prediction.physics_fs.toFixed(2)} ({(prediction.physics_fs < 1.0 ? "Unstable" : (prediction.physics_fs > 1.5 ? "Stable" : "Marginal"))})
+                    </span>
+                  </div>
+                  <div className="conf-bar-track" style={{ background: '#e5e7eb' }}>
+                    <div
+                      className="conf-bar-fill"
+                      style={{ 
+                        width: `${Math.min(100, Math.max(0, (2.0 - prediction.physics_fs) * 100))}%`, 
+                        background: prediction.physics_fs < 1.0 ? '#dc2626' : (prediction.physics_fs > 1.5 ? '#16a34a' : '#ea580c')
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                  <span>Model Confidence (ML Certainty)</span>
+                  <span style={{ color: '#475569' }}>{(prediction.confidence * 100).toFixed(1)}%</span>
+                </div>
+                <div className="conf-bar-track">
+                  <div
+                    className="conf-bar-fill"
+                    style={{ width: `${(prediction.confidence * 100).toFixed(1)}%`, background: '#94a3b8' }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* SHAP Explainability (Top Factors) */}
+            {prediction.top_factors && prediction.top_factors.length > 0 && (
+              <div className="drawer-section">
+                <div className="drawer-section-title">
+                  <Brain size={14} /> SHAP Local Explainability
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 8 }}>
+                  Specific factors driving this location's risk (via SHAP values):
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {prediction.top_factors.map((f, i) => (
+                    <div key={i}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                        <span style={{ fontSize: '0.8125rem', color: 'var(--color-text)' }}>
+                          {f.name.replace(/_/g, ' ')}
+                        </span>
+                        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#dc2626' }}>
+                          {(Math.abs(f.importance) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="progress-bar">
+                        <div
+                          className="progress-fill"
+                          style={{
+                            width: `${Math.min(100, Math.abs(f.importance) * 100)}%`,
+                            background: i === 0 ? '#dc2626' : i === 1 ? '#ea580c' : '#d97706',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Official Warnings Comparison (IMD Mock) */}
+            <div className="drawer-section">
+              <div className="drawer-section-title">
+                <AlertTriangle size={14} color="#eab308" /> Official Warnings Comparison
+              </div>
+              <div style={{ padding: '0.75rem', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.8rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ fontWeight: 600, color: '#334155' }}>IMD Meteorological Bulletin</span>
+                  <span style={{ color: f?.rainfall_intensity_mm > 50 ? '#dc2626' : '#16a34a', fontWeight: 600 }}>
+                    {f?.rainfall_intensity_mm > 50 ? 'Active Alert' : 'Normal'}
+                  </span>
+                </div>
+                <p style={{ color: '#64748b', margin: 0 }}>
+                  {f?.rainfall_intensity_mm > 100 
+                    ? "Red Alert: Extremely heavy rainfall expected in isolated places. Risk of localized flooding and landslides." 
+                    : f?.rainfall_intensity_mm > 50 
+                    ? "Orange Alert: Heavy to very heavy rainfall expected. Be prepared." 
+                    : "No significant weather warnings for this region at this time."}
+                </p>
+                <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#94a3b8' }}>
+                  * Source: India Meteorological Department (IMD) - Mock Data
+                </div>
               </div>
             </div>
 
