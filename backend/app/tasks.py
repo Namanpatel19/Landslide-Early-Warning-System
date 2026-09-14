@@ -189,6 +189,20 @@ async def run_sweep():
                         f"  → ALERT: {result['risk_level']} @ {name} | "
                         f"conf={result['confidence']*100:.1f}% | score={ensemble_sc:.3f}"
                     )
+                    
+                    # ── Trigger SMS if > 90% Risk Score ───────────────────────
+                    if ensemble_sc >= 0.90:
+                        from app.database import AuthorityContactModel
+                        from app.services.sms_service import send_sms_alert
+                        
+                        stmt = select(AuthorityContactModel).where(AuthorityContactModel.is_active == True)
+                        contacts_res = await db.execute(stmt)
+                        contacts = contacts_res.scalars().all()
+                        
+                        phone_numbers = [c.phone_number for c in contacts]
+                        if phone_numbers:
+                            msg = f"CRITICAL ALERT: LandWatch AI detected >90% landslide risk at {name}. Immediate verification required."
+                            await send_sms_alert(phone_numbers, msg)
 
                 await db.commit()
 

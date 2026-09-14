@@ -210,12 +210,7 @@ export default function AutoScannedGrid({ onLocationClick }) {
                     </div>
                     <div style={{ fontSize: '0.65rem', color: '#78716c', fontWeight: 600, textTransform: 'uppercase' }}>Risk Score</div>
                   </div>
-                  <div style={{ paddingLeft: 16, borderLeft: '1px solid #e5e7eb' }}>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#334155' }}>
-                      {(loc.confidence * 100).toFixed(1)}%
-                    </div>
-                    <div style={{ fontSize: '0.65rem', color: '#78716c', fontWeight: 600, textTransform: 'uppercase' }}>Model Confidence</div>
-                  </div>
+
                 </div>
                 <ConfBar value={loc.risk_score} color={cfg.color} />
 

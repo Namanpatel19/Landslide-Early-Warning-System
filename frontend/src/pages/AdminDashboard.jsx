@@ -11,6 +11,7 @@ import AutoScannedGrid from '../components/AutoScannedGrid';
 import LocationDetailDrawer from '../components/LocationDetailDrawer';
 import { predictRisk } from '../services/api';
 import { getRiskDetails } from '../utils/helpers';
+import { translations } from '../utils/translations';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const CRITICAL_CONFIDENCE_THRESHOLD = 0.90;
@@ -72,6 +73,8 @@ export default function AdminDashboard() {
   const [activePrediction, setActivePrediction] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
+  const [lang, setLang] = useState('English');
+  const t = translations[lang] || translations['English'];
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -145,32 +148,54 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleFalsePositive = async (alertId) => {
+    try {
+      const res = await fetch(`${API_BASE}/alerts/${alertId}/false_positive`, { method: 'POST' });
+      if (res.ok) {
+        alert('False alarm recorded! Model weights will adjust over time (RLHF).');
+        fetchAll(); // Refresh to hide or update status (if needed)
+      } else {
+        alert('Failed to mark false alarm.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error confirming false alarm.');
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="admin-page" style={{ justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ position: 'absolute', top: 20, right: 20 }}>
+          <select value={lang} onChange={e => setLang(e.target.value)} className="form-input" style={{ padding: '4px 12px', background: '#fff' }}>
+            <option value="English">English</option>
+            <option value="Hindi">हिंदी (Hindi)</option>
+            <option value="Assamese">অসমীয়া (Assamese)</option>
+          </select>
+        </div>
         <div className="portal-card" style={{ maxWidth: 400, textAlign: 'center' }}>
           <ShieldCheck size={48} color="#dc2626" style={{ margin: '0 auto 16px' }} />
-          <h2 style={{ marginBottom: 8 }}>Authority Access Restricted</h2>
+          <h2 style={{ marginBottom: 8 }}>{t.authRestricted}</h2>
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 24 }}>
-            Please enter your authority passcode to access the disaster management dashboard.
+            {t.pleaseEnterPass}
           </p>
           <form onSubmit={handleLogin}>
             <input 
               type="password" 
               className="form-input" 
-              placeholder="Enter Password..." 
+              placeholder={t.enterPassword} 
               value={password}
               onChange={e => setPassword(e.target.value)}
               style={{ width: '100%', marginBottom: 12, textAlign: 'center', letterSpacing: 4 }}
             />
             {loginError && <div style={{ color: '#dc2626', fontSize: 12, marginBottom: 12 }}>{loginError}</div>}
             <button type="submit" className="btn-primary" style={{ background: '#dc2626' }}>
-              Authenticate
+              {t.authenticate}
             </button>
           </form>
           <div style={{ marginTop: 24 }}>
             <Link to="/" className="portal-back" style={{ display: 'inline-flex', border: 'none' }}>
-              <ArrowLeft size={14} /> Back to Citizen Portal
+              <ArrowLeft size={14} /> {t.backToCitizen}
             </Link>
           </div>
         </div>
@@ -182,62 +207,69 @@ export default function AdminDashboard() {
     <div className="admin-page">
       <div className="portal-topbar">
         <Link to="/" className="portal-back">
-          <ArrowLeft size={16} /> Back to Citizen Portal
+          <ArrowLeft size={16} /> {t.backToCitizen}
         </Link>
         <div className="portal-logo">
           <img src="/logo.png" alt="LandWatch" style={{ width: 28, height: 28 }} />
-          <span>LandWatch <strong>NER</strong> · Authority Portal</span>
+          <span>LandWatch <strong>NER</strong></span>
         </div>
-        <button className="refresh-btn" onClick={fetchAll} disabled={refreshing}>
-          <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <select value={lang} onChange={e => setLang(e.target.value)} className="form-input" style={{ padding: '4px 12px', background: '#fff', fontSize: '0.8rem', height: 32 }}>
+            <option value="English">English</option>
+            <option value="Hindi">हिंदी</option>
+            <option value="Assamese">অসমীয়া</option>
+          </select>
+          <button className="refresh-btn" onClick={fetchAll} disabled={refreshing}>
+            <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
+            {t.refresh}
+          </button>
+        </div>
       </div>
 
       <div className="admin-hero">
         <ShieldCheck size={24} color="#16a34a" />
         <div>
-          <h1 className="admin-hero-title">Authority Control Panel</h1>
+          <h1 className="admin-hero-title">{t.authControlPanel}</h1>
           <p className="admin-hero-sub">
-            Review public reports, verify threats, and manage alert history.
-            <span style={{ color: '#dc2626', fontWeight: 600 }}> Restricted access.</span>
+            {t.authSub}
+            <span style={{ color: '#dc2626', fontWeight: 600 }}> {t.restrictedAccess}</span>
           </p>
         </div>
         <div className="admin-stats">
           <div className="stat-box">
             <div className="stat-num">{reports.length}</div>
-            <div className="stat-label">Total Reports</div>
+            <div className="stat-label">{t.totalReports}</div>
           </div>
           <div className="stat-box">
             <div className="stat-num" style={{ color: '#dc2626' }}>
               {reports.filter(r => r.severity === 'Critical' || r.severity === 'High').length}
             </div>
-            <div className="stat-label">High Priority</div>
+            <div className="stat-label">{t.highPriority}</div>
           </div>
           <div className="stat-box">
             <div className="stat-num" style={{ color: '#d97706' }}>
               {reports.filter(r => r.status === 'pending').length}
             </div>
-            <div className="stat-label">Pending Review</div>
+            <div className="stat-label">{t.pendingReview}</div>
           </div>
           <div className="stat-box">
             <div className="stat-num" style={{ color: '#ea580c' }}>
               {alerts.length}
             </div>
-            <div className="stat-label">System Alerts</div>
+            <div className="stat-label">{t.systemAlerts}</div>
           </div>
         </div>
       </div>
 
       <div className="admin-tabs">
         <button className={`admin-tab ${tab === 'map' ? 'active' : ''}`} onClick={() => setTab('map')}>
-          <MapPin size={14} /> Live Risk Map
+          <MapPin size={14} /> {t.liveRiskMap}
         </button>
         <button className={`admin-tab ${tab === 'reports' ? 'active' : ''}`} onClick={() => setTab('reports')}>
-          <Eye size={14} /> Public Reports ({reports.length})
+          <Eye size={14} /> {t.publicReports} ({reports.length})
         </button>
         <button className={`admin-tab ${tab === 'alerts' ? 'active' : ''}`} onClick={() => setTab('alerts')}>
-          <Bell size={14} /> System Alerts ({alerts.length})
+          <Bell size={14} /> {t.systemAlerts} ({alerts.length})
         </button>
       </div>
 
@@ -258,9 +290,9 @@ export default function AdminDashboard() {
         {tab === 'reports' && (
           <div>
             {loading ? (
-              <div className="empty-state"><div className="spinner" /><p>Loading reports…</p></div>
+              <div className="empty-state"><div className="spinner" /><p>{t.loadingReports}</p></div>
             ) : reports.length === 0 ? (
-              <div className="empty-state"><ShieldCheck size={32} color="#16a34a" /><p>No public reports yet.</p></div>
+              <div className="empty-state"><ShieldCheck size={32} color="#16a34a" /><p>{t.noPublicReports}</p></div>
             ) : (
               reports.map(report => (
                 <div key={report.id} className="admin-report-card">
@@ -280,7 +312,7 @@ export default function AdminDashboard() {
                           {report.location_name}
                         </div>
                         <div className="admin-report-meta">
-                          {report.has_exif_gps ? '📍 GPS verified' : '✏️ Manual location'}
+                          {report.has_exif_gps ? `📍 ${t.gpsVerified}` : `✏️ ${t.manualLocation}`}
                           {report.lat && report.lon
                             ? ` · (${report.lat.toFixed(4)}°N, ${report.lon.toFixed(4)}°E)`
                             : ''}
@@ -310,13 +342,13 @@ export default function AdminDashboard() {
                           className="action-btn action-btn-verify"
                           onClick={() => handleStatus(report.id, 'verified')}
                         >
-                          <ShieldCheck size={13} /> Verify Threat
+                          <ShieldCheck size={13} /> {t.verifyThreat}
                         </button>
                         <button
                           className="action-btn action-btn-reject"
                           onClick={() => handleStatus(report.id, 'rejected')}
                         >
-                          <XCircle size={13} /> False Report
+                          <XCircle size={13} /> {t.falseReport}
                         </button>
                       </>
                     )}
@@ -332,7 +364,7 @@ export default function AdminDashboard() {
             {alerts.length === 0 ? (
               <div className="empty-state">
                 <Bell size={32} color="#d97706" />
-                <p>No system alerts yet. High/Critical predictions will appear here.</p>
+                <p>{t.noSystemAlerts}</p>
               </div>
             ) : (
               alerts.map(alert => {
@@ -345,7 +377,7 @@ export default function AdminDashboard() {
                         {alert.location_name}
                       </div>
                       <div className="alert-row-meta">
-                        {cfg.level} Risk · {(alert.risk_score * 100).toFixed(1)}% score · {(alert.confidence * 100).toFixed(1)}% confidence
+                        {cfg.level} Risk · {(alert.risk_score * 100).toFixed(1)}% score
                         {' · '}{new Date(alert.timestamp).toLocaleString()}
                       </div>
                     </div>
@@ -356,13 +388,22 @@ export default function AdminDashboard() {
                       }}>
                         {cfg.level.toUpperCase()}
                       </span>
-                      <button 
-                        className="action-btn" 
-                        style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', padding: '4px 8px', fontSize: 10, width: 'auto' }}
-                        onClick={() => handleTruePositive(alert.id)}
-                      >
-                        <CheckCircle size={10} /> Confirm Landslide (RAG)
-                      </button>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button 
+                          className="action-btn" 
+                          style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', padding: '4px 8px', fontSize: 10, width: 'auto' }}
+                          onClick={() => handleTruePositive(alert.id)}
+                        >
+                          <CheckCircle size={10} style={{ marginRight: 2 }} /> {t.confirmLandslide}
+                        </button>
+                        <button 
+                          className="action-btn" 
+                          style={{ background: '#f8fafc', color: '#64748b', border: '1px solid #cbd5e1', padding: '4px 8px', fontSize: 10, width: 'auto' }}
+                          onClick={() => handleFalsePositive(alert.id)}
+                        >
+                          <XCircle size={10} style={{ marginRight: 2 }} /> {t.falseAlarm}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

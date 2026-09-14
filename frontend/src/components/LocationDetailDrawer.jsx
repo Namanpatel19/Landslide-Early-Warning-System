@@ -38,7 +38,7 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
         <div className="drawer-header" style={{ borderLeft: `4px solid ${color}` }}>
           <div>
             <div className="drawer-risk-badge" style={{ background: cfg.bg, color: color, border: `1px solid ${cfg.border}` }}>
-              Risk Level: {cfg.level} ({(riskScore * 100).toFixed(1)}% score) · Model Confidence: {prediction ? (prediction.confidence * 100).toFixed(1) : '--'}%
+              Risk Level: {cfg.level} ({(riskScore * 100).toFixed(1)}% score)
             </div>
             <h2 className="drawer-title">{prediction?.location_name || 'Loading…'}</h2>
             {prediction && (
@@ -72,8 +72,8 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
                 scrollWheelZoom={false}
               >
                 <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; OpenStreetMap contributors'
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                  attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
                 />
                 <CircleMarker
                   center={[prediction.lat, prediction.lon]}
@@ -131,9 +131,19 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
                     value={`${f.seismic_activity?.toFixed(2)} mag`}
                   />
                   <MetricRow
+                    icon={<Activity size={14} color="#9333ea" />}
+                    label="Vibration Level"
+                    value={`${f.vibration_level?.toFixed(2) || '0.00'}`}
+                  />
+                  <MetricRow
                     icon={<TrendingUp size={14} color="#78716c" />}
                     label="Slope Angle"
                     value={`${f.slope_angle?.toFixed(1)}°`}
+                  />
+                  <MetricRow
+                    icon={<Wind size={14} color="#facc15" />}
+                    label="Construc. Prox."
+                    value={`${f.distance_to_construction_area?.toFixed(1) || '0.0'} km`}
                   />
                   {f.population_density !== undefined && (
                     <MetricRow
@@ -183,19 +193,6 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
                   </div>
                 </div>
               )}
-
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                  <span>Model Confidence (ML Certainty)</span>
-                  <span style={{ color: '#475569' }}>{(prediction.confidence * 100).toFixed(1)}%</span>
-                </div>
-                <div className="conf-bar-track">
-                  <div
-                    className="conf-bar-fill"
-                    style={{ width: `${(prediction.confidence * 100).toFixed(1)}%`, background: '#94a3b8' }}
-                  />
-                </div>
-              </div>
             </div>
 
             {/* SHAP Explainability (Top Factors) */}

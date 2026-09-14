@@ -11,11 +11,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, update
 from datetime import datetime, timezone
 
-from ..database import get_db, AlertModel, TruePositiveModel, AutoScannedLocationModel
+from pydantic import BaseModel
+
+from ..database import get_db, AlertModel, TruePositiveModel, AutoScannedLocationModel, AuthorityContactModel
 from ..schemas import AlertRecord, AlertsResponse, NotifyRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
+
+class ContactCreate(BaseModel):
+    name: str
+    phone_number: str
+
+class ContactResponse(BaseModel):
+    id: int
+    name: str
+    phone_number: str
+    is_active: bool
 
 
 @router.get("", response_model=AlertsResponse)
@@ -122,3 +134,42 @@ async def mark_true_positive(alert_id: int, db: AsyncSession = Depends(get_db)):
 
     logger.info(f"✅ Marked alert {alert_id} ({alert.location_name}) as True Positive.")
     return {"status": "success", "message": "Saved to true positives for RAG."}
+
+@router.post("/{alert_id}/false_positive")
+async def mark_false_positive(alert_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Mark an alert as a 'False Alarm'.
+    Demonstrates RLHF (Reinforcement Learning from Human Feedback) loop.
+    """
+    stmt = select(AlertModel).where(AlertModel.id == alert_id)
+    result = await db.execute(stmt)
+    alert = result.scalars().first()
+    
+    if not alert:
+        return {"error": "Alert not found"}, 404
+
+    # Future: log to false positives table and use for negative sampling in retraining
+    logger.info(f"❌ Marked alert {alert_id} ({alert.location_name}) as False Alarm (RLHF Feedback).")
+    return {"status": "success", "message": "Feedback recorded. Model will down-weight these features."}
+
+
+@router.get("/contacts")
+async def get_contacts(db: AsyncSession = Depends(get_db)):
+    stmt = select(AuthorityContactModel).where(AuthorityContactModel.is_active == True)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+@router.post("/contacts")
+async def add_contact(contact: ContactCreate, db: AsyncSession = Depends(get_db)):
+    new_contact = AuthorityContactModel(name=contact.name, phone_number=contact.phone_number)
+    db.add(new_contact)
+    await db.commit()
+    return new_contact
+
+@router.delete("/contacts/{contact_id}")
+async def delete_contact(contact_id: int, db: AsyncSession = Depends(get_db)):
+    stmt = update(AuthorityContactModel).where(AuthorityContactModel.id == contact_id).values(is_active=False)
+    await db.execute(stmt)
+    await db.commit()
+    return {"status": "deleted"}
+

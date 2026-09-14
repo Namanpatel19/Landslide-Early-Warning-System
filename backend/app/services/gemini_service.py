@@ -66,15 +66,19 @@ async def analyze_landslide_image(image_path: str, language: str = "English") ->
         
     prompt = f"""
     Analyze this image for signs of potential landslide risk or land instability.
-    Look for:
+    First, verify if the image is relevant. An image is relevant ONLY if it shows outdoor terrain, mountains, slopes, soil cracks, erosion, mud, or potential illegal mining/construction activity.
+    If the image is a selfie, indoor photo, screenshot, or clearly irrelevant, mark "is_relevant" as false.
+    
+    If relevant, look for:
     1. Soil cracks or fissures
     2. Significant soil erosion or exposed bare earth on slopes
     3. Abnormal water seepage on slopes
     4. Debris accumulation or fallen rocks
     
-    Return ONLY a valid JSON object with exactly these two keys:
+    Return ONLY a valid JSON object with exactly these three keys:
+    "is_relevant": true or false (boolean).
     "analysis": A 1-2 sentence description of what you see regarding land stability. MUST BE TRANSLATED TO {language}.
-    "severity": One of these exact strings based on visual evidence: "Low", "Medium", "High", "Critical". If no risk is visible, use "Low".
+    "severity": One of these exact strings based on visual evidence: "Low", "Medium", "High", "Critical". If no risk is visible or if is_relevant is false, use "Low".
     """
     
     try:

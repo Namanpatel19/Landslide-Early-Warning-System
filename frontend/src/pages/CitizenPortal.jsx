@@ -5,8 +5,30 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Camera, Upload, MapPin, CheckCircle, AlertCircle, X, ArrowLeft } from 'lucide-react';
+import { Camera, Upload, MapPin, CheckCircle, AlertCircle, X, ArrowLeft, Crosshair } from 'lucide-react';
 import { uploadReport } from '../services/api';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+
+// Fix leaflet icon issue
+import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
+import iconUrl from 'leaflet/dist/images/marker-icon.png';
+import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl,
+  iconUrl,
+  shadowUrl,
+});
+
+function LocationPicker({ position, setPosition }) {
+  useMapEvents({
+    click(e) {
+      setPosition(e.latlng);
+    },
+  });
+  return position ? <Marker position={position} /> : null;
+}
 
 export default function CitizenPortal() {
   const [image, setImage]           = useState(null);
@@ -241,6 +263,7 @@ export default function CitizenPortal() {
               ref={fileRef}
               type="file"
               accept="image/*"
+              capture="environment"
               onChange={handleFile}
               style={{ display: 'none' }}
             />
@@ -257,7 +280,7 @@ export default function CitizenPortal() {
             </div>
 
             <div className="form-row">
-              <div className="form-group">
+              <div className="form-group" style={{ flex: 1 }}>
                 <label className="form-label">Latitude</label>
                 <input
                   type="number"
@@ -268,7 +291,7 @@ export default function CitizenPortal() {
                   className="form-input"
                 />
               </div>
-              <div className="form-group">
+              <div className="form-group" style={{ flex: 1 }}>
                 <label className="form-label">Longitude</label>
                 <input
                   type="number"
@@ -279,6 +302,47 @@ export default function CitizenPortal() {
                   className="form-input"
                 />
               </div>
+            </div>
+
+            <button 
+              type="button" 
+              className="btn-secondary"
+              style={{ width: '100%', marginBottom: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+              onClick={() => {
+                if (navigator.geolocation) {
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                      setManualLat(pos.coords.latitude.toFixed(6));
+                      setManualLon(pos.coords.longitude.toFixed(6));
+                    },
+                    (err) => alert("Could not fetch location: " + err.message)
+                  );
+                } else {
+                  alert("Geolocation is not supported by your browser.");
+                }
+              }}
+            >
+              <Crosshair size={16} /> Use My Current Location
+            </button>
+
+            <div style={{ height: '200px', width: '100%', marginBottom: '1.5rem', borderRadius: '8px', overflow: 'hidden', border: '1px solid #d1d5db' }}>
+              <MapContainer 
+                center={manualLat && manualLon ? [manualLat, manualLon] : [26.2006, 92.9376]} 
+                zoom={6} 
+                style={{ height: '100%', width: '100%' }}
+              >
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; OpenStreetMap contributors'
+                />
+                <LocationPicker 
+                  position={manualLat && manualLon ? {lat: parseFloat(manualLat), lng: parseFloat(manualLon)} : null}
+                  setPosition={(pos) => {
+                    setManualLat(pos.lat.toFixed(6));
+                    setManualLon(pos.lng.toFixed(6));
+                  }}
+                />
+              </MapContainer>
             </div>
 
             <div className="form-group" style={{ marginBottom: '1.5rem' }}>

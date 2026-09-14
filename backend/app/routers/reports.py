@@ -126,6 +126,15 @@ async def upload_report(
         
     # 3. Analyze with Gemini Vision
     analysis_result = await analyze_landslide_image(filepath, language=language)
+    
+    if analysis_result.get("is_relevant") is False:
+        # Clean up temp file
+        try:
+            os.remove(filepath)
+        except:
+            pass
+        raise HTTPException(status_code=400, detail="Irrelevant image detected. Please upload photos of land cracks, slopes, mountains, or illegal mining.")
+        
     raw_severity = analysis_result.get("severity", "Pending")
 
     # 4. Combine metadata verification + Gemini into final status

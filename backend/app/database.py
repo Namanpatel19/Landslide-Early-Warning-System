@@ -51,6 +51,14 @@ class AlertModel(Base):
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class AuthorityContactModel(Base):
+    __tablename__ = "authority_contacts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100))
+    phone_number = Column(String(20), nullable=False, unique=True)
+    is_active = Column(Boolean, default=True)
+
 class PublicReportModel(Base):
     __tablename__ = "public_reports"
 

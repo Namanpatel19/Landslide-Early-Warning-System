@@ -11,7 +11,7 @@ export default function GlobalAlertModal({ locations }) {
     if (!locations || locations.length === 0) return;
     
     const criticalLocation = locations.find(
-      loc => loc.risk_score >= 0.86 && loc.confidence > 0.90 && !dismissedIds.has(loc.id)
+      loc => loc.risk_score >= 0.90 && !dismissedIds.has(loc.id)
     );
 
     if (criticalLocation) {
@@ -71,7 +71,7 @@ export default function GlobalAlertModal({ locations }) {
         </div>
         
         <p style={{ fontSize: 15, color: '#4b5563', marginBottom: 24, lineHeight: 1.6 }}>
-          The AI model has detected an imminent landslide threat with a <strong>{(activeAlert.risk_score * 100).toFixed(1)}% Risk Score</strong> and <strong>{(activeAlert.confidence * 100).toFixed(1)}% Confidence</strong>. 
+          The AI model has detected an imminent landslide threat with a <strong>{(activeAlert.risk_score * 100).toFixed(1)}% Risk Score</strong>. 
           Authorities must take immediate preventative action.
         </p>
 
