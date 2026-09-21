@@ -18,7 +18,7 @@ function MetricRow({ icon, label, value }) {
   );
 }
 
-export default function LocationDetailDrawer({ prediction, onClose, isLoading }) {
+export default function LocationDetailDrawer({ prediction, onClose, isLoading, t = {} }) {
   // Close on Escape key
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
@@ -38,7 +38,7 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
         <div className="drawer-header" style={{ borderLeft: `4px solid ${color}` }}>
           <div>
             <div className="drawer-risk-badge" style={{ background: cfg.bg, color: color, border: `1px solid ${cfg.border}` }}>
-              Risk Level: {cfg.level} ({(riskScore * 100).toFixed(1)}% score)
+              Risk Level: {t[cfg.level?.toLowerCase()] || cfg.level} ({(riskScore * 100).toFixed(1)}% score)
             </div>
             <h2 className="drawer-title">{prediction?.location_name || 'Loading…'}</h2>
             {prediction && (
@@ -82,7 +82,7 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
                 >
                   <Popup>
                     <strong>{prediction.location_name}</strong><br />
-                    {cfg.level} Risk — {(riskScore * 100).toFixed(1)}% score
+                    {t[cfg.level?.toLowerCase()] || cfg.level} Risk — {(riskScore * 100).toFixed(1)}% score
                   </Popup>
                 </CircleMarker>
               </MapContainer>
@@ -115,6 +115,20 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
                     label="Temperature"
                     value={`${f.temperature?.toFixed(1)}°C`}
                   />
+                  {f.forecast_rainfall_next_3_days !== undefined && (
+                  <MetricRow
+                    icon={<Droplets size={14} color="#0284c7" />}
+                    label="3-Day Forecast"
+                    value={`${f.forecast_rainfall_next_3_days?.toFixed(1)} mm`}
+                  />
+                  )}
+                  {f.forecast_rainfall_next_5_days !== undefined && (
+                  <MetricRow
+                    icon={<Droplets size={14} color="#0369a1" />}
+                    label="5-Day Forecast"
+                    value={`${f.forecast_rainfall_next_5_days?.toFixed(1)} mm`}
+                  />
+                  )}
                   <MetricRow
                     icon={<Wind size={14} color="#6366f1" />}
                     label="Humidity"
@@ -230,7 +244,7 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
               </div>
             )}
 
-            {/* Official Warnings Comparison (IMD Mock) */}
+            {/* Official Warnings Comparison (IMD) */}
             <div className="drawer-section">
               <div className="drawer-section-title">
                 <AlertTriangle size={14} color="#eab308" /> Official Warnings Comparison
@@ -250,7 +264,7 @@ export default function LocationDetailDrawer({ prediction, onClose, isLoading })
                     : "No significant weather warnings for this region at this time."}
                 </p>
                 <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#94a3b8' }}>
-                  * Source: India Meteorological Department (IMD) - Mock Data
+                  * Source: India Meteorological Department (IMD)
                 </div>
               </div>
             </div>

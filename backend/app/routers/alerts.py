@@ -13,8 +13,8 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel
 
-from ..database import get_db, AlertModel, TruePositiveModel, AutoScannedLocationModel, AuthorityContactModel
-from ..schemas import AlertRecord, AlertsResponse, NotifyRequest
+from ..database import get_db, AlertModel, TruePositiveModel, AutoScannedLocationModel, AuthorityContactModel, PublicAlertModel
+from ..schemas import AlertRecord, AlertsResponse, NotifyRequest, PublicAlertResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
@@ -49,6 +49,7 @@ async def get_alerts(
                 location_name=r.location_name,
                 risk_level=r.risk_level,
                 confidence=r.confidence,
+                risk_score=r.risk_score or 0.0,
                 top_factors=json.loads(r.top_factors_json or "[]"),
                 notified=r.notified,
                 timestamp=(r.timestamp if r.timestamp.tzinfo
@@ -58,6 +59,14 @@ async def get_alerts(
         ],
         total=len(records),
     )
+
+
+@router.get("/public", response_model=list[PublicAlertResponse])
+async def get_public_alerts(db: AsyncSession = Depends(get_db)):
+    """Return active public alerts for citizens."""
+    stmt = select(PublicAlertModel).where(PublicAlertModel.is_active == True).order_by(desc(PublicAlertModel.timestamp))
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 
 @router.post("/notify")

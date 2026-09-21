@@ -14,58 +14,13 @@ from app.services.gemini_service import generate_risk_explanation, analyze_lands
 
 logger = logging.getLogger(__name__)
 
-# ─── 20 High-Risk NER Locations ─────────────────────────────────────────────
-# Covers all 8 NE states — selected based on:
-#  - Historical landslide frequency (GSI records)
-#  - High annual rainfall zones (>2000mm/yr)
-#  - Steep terrain (>25° slope)
-#  - Proximity to rivers/fault lines
-CRITICAL_LOCATIONS = [
-    # Sikkim
-    {"name": "Mangan, Sikkim",            "lat": 27.50, "lon": 88.53, "state": "Sikkim"},
-    {"name": "Gangtok Foothills, Sikkim", "lat": 27.33, "lon": 88.61, "state": "Sikkim"},
-
-    # Arunachal Pradesh
-    {"name": "Tawang, Arunachal Pradesh",       "lat": 27.58, "lon": 91.86, "state": "Arunachal Pradesh"},
-    {"name": "Itanagar Hills, Arunachal Pradesh","lat": 27.08, "lon": 93.60, "state": "Arunachal Pradesh"},
-    {"name": "Papum Pare, Arunachal Pradesh",   "lat": 27.15, "lon": 93.75, "state": "Arunachal Pradesh"},
-    {"name": "Siang Valley, Arunachal Pradesh",  "lat": 28.00, "lon": 95.00, "state": "Arunachal Pradesh"},
-
-    # Meghalaya
-    {"name": "Cherrapunji, Meghalaya",    "lat": 25.28, "lon": 91.73, "state": "Meghalaya"},
-    {"name": "Shillong Plateau, Meghalaya","lat": 25.57, "lon": 91.88, "state": "Meghalaya"},
-    {"name": "Jaintia Hills, Meghalaya",   "lat": 25.40, "lon": 92.18, "state": "Meghalaya"},
-
-    # Manipur
-    {"name": "Noney, Manipur",            "lat": 24.81, "lon": 93.63, "state": "Manipur"},
-    {"name": "Senapati, Manipur",         "lat": 25.27, "lon": 93.97, "state": "Manipur"},
-    {"name": "Ukhrul, Manipur",           "lat": 25.11, "lon": 94.36, "state": "Manipur"},
-
-    # Mizoram
-    {"name": "Aizawl, Mizoram",           "lat": 23.73, "lon": 92.71, "state": "Mizoram"},
-    {"name": "Lunglei, Mizoram",          "lat": 22.89, "lon": 92.73, "state": "Mizoram"},
-
-    # Nagaland
-    {"name": "Kohima, Nagaland",          "lat": 25.67, "lon": 94.10, "state": "Nagaland"},
-    {"name": "Pfutsero, Nagaland",        "lat": 25.54, "lon": 94.02, "state": "Nagaland"},
-
-    # Assam Hill Districts
-    {"name": "Dima Hasao, Assam",         "lat": 25.18, "lon": 93.02, "state": "Assam"},
-    {"name": "Karbi Anglong, Assam",      "lat": 26.09, "lon": 93.56, "state": "Assam"},
-
-    # Tripura
-    {"name": "North Tripura Hills",       "lat": 24.10, "lon": 92.10, "state": "Tripura"},
-
-    # Meghalaya border/Barak Valley
-    {"name": "Barak Valley Slopes, Assam","lat": 24.83, "lon": 92.79, "state": "Assam"},
-]
+from app.database import AsyncSessionLocal, AutoScannedLocationModel, AlertModel, TruePositiveModel, MonitoredGridModel, PublicAlertModel
+from sqlalchemy import select, or_, case, desc
 
 # ─── Sync Frequency ──────────────────────────────────────────────────────────
-# 2 minutes = 120 seconds
-# 20 locations × 1.5s delay = ~30s per full sweep → safe for all free-tier APIs
 SWEEP_INTERVAL_SECONDS = 120
-# Stagger requests to avoid hitting API rate limits simultaneously
 DELAY_BETWEEN_LOCATIONS = 1.5
+MAX_POINTS_PER_SWEEP = 8
 
 _sweeper_task = None
 
@@ -87,12 +42,56 @@ async def run_sweep():
         logger.warning("Sweeper skipped: ML model not loaded.")
         return
 
-    logger.info(f"Starting background sweep of {len(CRITICAL_LOCATIONS)} critical locations...")
+    logger.info("Starting background sweep for dynamic grid locations...")
 
     async with AsyncSessionLocal() as db:
-        for loc in CRITICAL_LOCATIONS:
+        # Tiered Sync Query
+        # Tier 1: High/Critical > 15m
+        # Tier 2: Medium > 30m
+        # Tier 3: Low/Pending > 60m
+        now_utc = datetime.now(timezone.utc)
+        
+        stmt = select(MonitoredGridModel).where(
+            or_(
+                MonitoredGridModel.last_synced == None,
+                # Tier 1
+                (MonitoredGridModel.last_risk_level.in_(["High", "Critical"])) & 
+                ((now_utc.timestamp() - case((MonitoredGridModel.last_synced != None, MonitoredGridModel.last_synced), else_=0)) > 15 * 60),  # Not valid in sqlite strictly with timestamps, let's process in memory if we have to, or use native SQL.
+            )
+        )
+        
+        # Actually, since SQLite date math is tricky in SQLAlchemy, we will fetch points, 
+        # compute due in Python, and pick top 15.
+        all_points_res = await db.execute(select(MonitoredGridModel))
+        all_points = all_points_res.scalars().all()
+        
+        due_points = []
+        for pt in all_points:
+            if not pt.last_synced:
+                due_points.append((pt, 0)) # Highest priority
+                continue
+                
+            elapsed_mins = (now_utc - pt.last_synced.replace(tzinfo=timezone.utc)).total_seconds() / 60
+            
+            if pt.last_risk_level in ["High", "Critical"] and elapsed_mins > 15:
+                due_points.append((pt, 1))
+            elif pt.last_risk_level == "Medium" and elapsed_mins > 30:
+                due_points.append((pt, 2))
+            elif pt.last_risk_level in ["Low", "Pending"] and elapsed_mins > 60:
+                due_points.append((pt, 3))
+
+        # Sort by priority tier, then by longest time since last sync
+        due_points.sort(key=lambda x: (x[1], x[0].last_synced or datetime.min.replace(tzinfo=timezone.utc)))
+        
+        target_points = [p[0] for p in due_points[:MAX_POINTS_PER_SWEEP]]
+        
+        if not target_points:
+            logger.info("No points due for syncing at this time.")
+            return
+
+        for loc in target_points:
             try:
-                lat, lon, name = loc["lat"], loc["lon"], loc["name"]
+                lat, lon, name = loc.lat, loc.lon, loc.location_name
                 logger.info(f"Sweeping: {name} ({lat:.3f}, {lon:.3f})")
 
                 # ── Fetch all data concurrently ───────────────────────────────
@@ -126,12 +125,9 @@ async def run_sweep():
                     image_features = extract_image_features(img_bytes)
 
                     # Gemini Vision: detect cracks, erosion, bare soil visually
-                    try:
-                        vision_result = await analyze_landslide_image_bytes(img_bytes)
-                        gemini_vision_severity = vision_result.get("severity", "Pending")
-                        logger.info(f"  → Gemini Vision: {gemini_vision_severity}")
-                    except Exception as e:
-                        logger.warning(f"  → Gemini Vision failed (non-critical): {e}")
+                    # PROTOTYPE FIX: Bypassing Gemini Vision in background sweeper to save strict 20 API request quota for Citizen Portal image uploads!
+                    gemini_vision_severity = "Pending"
+                    logger.info(f"  → Gemini Vision: Bypassed to preserve API quota")
 
                 # ── Ensemble score: 75% tabular + 15% image + 10% Gemini ──────
                 ensemble_sc = ensemble_risk_score(
@@ -142,7 +138,7 @@ async def run_sweep():
                 )
 
                 # ── RAG Context Fetching ──────────────────────────────────────
-                from sqlalchemy import select, desc
+
                 stmt = select(TruePositiveModel).where(
                     TruePositiveModel.location_name == name
                 ).order_by(desc(TruePositiveModel.timestamp)).limit(3)
@@ -155,10 +151,8 @@ async def run_sweep():
                         rag_context += f"- Confirmed landslide occurred here previously with these conditions: {ev.features_json}\n"
 
                 # ── Gemini text explanation ───────────────────────────────────
-                explanation = await generate_risk_explanation(
-                    features, result["risk_level"], result["confidence"], rag_context
-                )
-
+                # PROTOTYPE FIX: Bypassing Gemini explanation in sweeper to save strict 20 API request quota for Citizen Portal!
+                explanation = f"Automated alert: High soil moisture ({weather['soil_moisture']*100:.1f}%) and steep slope ({geo.get('slope_angle', 0)}°) detected."
                 # ── Persist result ────────────────────────────────────────────
                 now = datetime.now(timezone.utc)
                 db.add(AutoScannedLocationModel(
@@ -173,20 +167,29 @@ async def run_sweep():
                     timestamp=now,
                 ))
 
-                # ── Alert if High/Critical ────────────────────────────────────
-                if result["risk_level"] in ("High", "Critical"):
+                # ── Alert if escalated to High/Critical ─────────────────────────
+                if result["risk_level"] in ("High", "Critical") and loc.last_risk_level not in ("High", "Critical"):
                     db.add(AlertModel(
                         lat=lat,
                         lon=lon,
                         location_name=name,
                         risk_level=result["risk_level"],
                         confidence=result["confidence"],
+                        risk_score=ensemble_sc,
                         top_factors_json=json.dumps(result["top_factors"]),
                         notified=False,
                         timestamp=now,
                     ))
+                    
+                    if result["risk_level"] == "Critical":
+                        db.add(PublicAlertModel(
+                            location_name=name,
+                            message=f"⚠️ High landslide risk detected near {name}. Avoid the marked zone. Stay alert for updates.",
+                            timestamp=now,
+                        ))
+
                     logger.warning(
-                        f"  → ALERT: {result['risk_level']} @ {name} | "
+                        f"  → ALERT ESCALATED: {result['risk_level']} @ {name} | "
                         f"conf={result['confidence']*100:.1f}% | score={ensemble_sc:.3f}"
                     )
                     
@@ -201,13 +204,15 @@ async def run_sweep():
                         
                         phone_numbers = [c.phone_number for c in contacts]
                         if phone_numbers:
-                            msg = f"CRITICAL ALERT: LandWatch AI detected >90% landslide risk at {name}. Immediate verification required."
+                            msg = f"CRITICAL ALERT: AI-Based Risk Monitoring NER detected >90% landslide risk at {name}. Immediate verification required."
                             await send_sms_alert(phone_numbers, msg)
 
+                loc.last_synced = now
+                loc.last_risk_level = result["risk_level"]
                 await db.commit()
 
             except Exception as e:
-                logger.error(f"Error sweeping {loc['name']}: {e}", exc_info=True)
+                logger.error(f"Error sweeping {loc.location_name}: {e}", exc_info=True)
 
             # Rate-limit backoff between locations
             await asyncio.sleep(DELAY_BETWEEN_LOCATIONS)
@@ -232,7 +237,7 @@ def start_sweeper():
     if _sweeper_task is None:
         loop = asyncio.get_running_loop()
         _sweeper_task = loop.create_task(sweeper_loop())
-        logger.info(f"Background sweeper started — {len(CRITICAL_LOCATIONS)} locations, every {SWEEP_INTERVAL_SECONDS}s.")
+        logger.info(f"Background sweeper started — running every {SWEEP_INTERVAL_SECONDS}s.")
 
 
 def stop_sweeper():

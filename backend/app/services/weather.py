@@ -49,7 +49,7 @@ async def fetch_current_weather(lat: float, lon: float) -> dict:
         ],
         "daily": ["precipitation_sum"],
         "past_days": 15,
-        "forecast_days": 1,
+        "forecast_days": 5,
         "timezone": "Asia/Kolkata",
     }
 
@@ -62,13 +62,18 @@ async def fetch_current_weather(lat: float, lon: float) -> dict:
         current = data.get("current", {})
         daily_rain = data.get("daily", {}).get("precipitation_sum", [])
         
-        # Calculate antecedent rainfall (exclude today which is the last element in daily_rain if forecast_days=1, 
-        # actually past_days=15 + forecast=1 means 16 elements. The last one is today.
-        past_rain = daily_rain[:-1] if len(daily_rain) > 15 else daily_rain
+        # 16 elements total if past=15, forecast=1. Now past=15, forecast=5 -> 20 elements.
+        # past rain = first 15 elements
+        past_rain = daily_rain[:15] if len(daily_rain) >= 15 else daily_rain
+        # forecast rain = elements 15 onwards
+        future_rain = daily_rain[15:] if len(daily_rain) >= 15 else []
         
         rain_3d = sum([r for r in past_rain[-3:] if r is not None]) if len(past_rain) >= 3 else 0.0
         rain_7d = sum([r for r in past_rain[-7:] if r is not None]) if len(past_rain) >= 7 else 0.0
         rain_15d = sum([r for r in past_rain[-15:] if r is not None]) if len(past_rain) >= 15 else 0.0
+
+        forecast_3d = sum([r for r in future_rain[:3] if r is not None]) if len(future_rain) >= 3 else 0.0
+        forecast_5d = sum([r for r in future_rain[:5] if r is not None]) if len(future_rain) >= 5 else 0.0
 
         result = {
             "rainfall_intensity_mm": current.get("precipitation", 0.0) * 24,  # mm/hour → mm/day approx
@@ -78,6 +83,8 @@ async def fetch_current_weather(lat: float, lon: float) -> dict:
             "rainfall_last_3_days": rain_3d,
             "rainfall_last_7_days": rain_7d,
             "rainfall_last_15_days": rain_15d,
+            "forecast_rainfall_next_3_days": forecast_3d,
+            "forecast_rainfall_next_5_days": forecast_5d,
             "cached": False,
         }
 
@@ -100,6 +107,8 @@ async def fetch_current_weather(lat: float, lon: float) -> dict:
             "rainfall_last_3_days": 120.0,
             "rainfall_last_7_days": 250.0,
             "rainfall_last_15_days": 400.0,
+            "forecast_rainfall_next_3_days": 80.0,
+            "forecast_rainfall_next_5_days": 130.0,
             "cached": False,
         }
 

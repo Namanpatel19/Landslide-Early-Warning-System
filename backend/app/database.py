@@ -9,7 +9,7 @@ Tables:
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-from sqlalchemy import Column, Integer, Float, String, Boolean, DateTime, Text
+from sqlalchemy import Column, Integer, Float, String, Boolean, DateTime, Text, UniqueConstraint
 from datetime import datetime, timezone
 import json
 
@@ -46,6 +46,7 @@ class AlertModel(Base):
     location_name = Column(String(200), default="Unknown")
     risk_level = Column(String(20), nullable=False)
     confidence = Column(Float, nullable=False)
+    risk_score = Column(Float, nullable=True)  # Added for NaN bug
     top_factors_json = Column(Text)  # serialized list of {name, importance}
     notified = Column(Boolean, default=False)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -59,6 +60,29 @@ class AuthorityContactModel(Base):
     phone_number = Column(String(20), nullable=False, unique=True)
     is_active = Column(Boolean, default=True)
 
+
+class PublicAlertModel(Base):
+    """Simple safety notifications for citizens."""
+    __tablename__ = "public_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    location_name = Column(String(200), default="Unknown")
+    message = Column(String(500), nullable=False)
+    is_active = Column(Boolean, default=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class SmsLogModel(Base):
+    """Log of all sent SMS alerts."""
+    __tablename__ = "sms_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recipient = Column(String(20), nullable=False)
+    message = Column(String(500), nullable=False)
+    status = Column(String(50), default="pending")
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class PublicReportModel(Base):
     __tablename__ = "public_reports"
 
@@ -68,6 +92,7 @@ class PublicReportModel(Base):
     lon = Column(Float, nullable=True)
     location_name = Column(String(200), default="Unknown")
     has_exif_gps = Column(Boolean, default=False)
+    report_type = Column(String(50), default="Other")
     gemini_analysis = Column(Text, nullable=True)  # JSON or text from Gemini
     severity = Column(String(20), default="Pending") # Pending, Low, Medium, High, Critical, False Report
     status = Column(String(20), default="pending") # pending, verified, rejected
@@ -102,6 +127,22 @@ class AutoScannedLocationModel(Base):
     features_json = Column(Text)
     gemini_explanation = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class MonitoredGridModel(Base):
+    """Stores dynamically generated grid points for sweeping."""
+    __tablename__ = "monitored_grid"
+    __table_args__ = (UniqueConstraint('lat', 'lon', name='uix_lat_lon'),)
+    
+    id = Column(Integer, primary_key=True, index=True)
+    lat = Column(Float, nullable=False, index=True)
+    lon = Column(Float, nullable=False, index=True)
+    location_name = Column(String(200))
+    elevation = Column(Float)
+    slope = Column(Float)
+    last_synced = Column(DateTime, nullable=True)
+    last_risk_level = Column(String(20), default="Pending")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 

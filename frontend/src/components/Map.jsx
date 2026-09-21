@@ -8,7 +8,9 @@
  */
 
 import React, { useRef, useEffect, useCallback } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup, useMapEvents, Polyline, useMap } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
+import { KEY_ROADS, getRoadStatus } from '../utils/roads';
 import { formatConfidence, formatDateTime, getRiskDetails } from '../utils/helpers';
 
 // NER bounds for map view
@@ -35,7 +37,42 @@ function MapClickHandler({ onLocationClick, isLoading }) {
   return null;
 }
 
-export default function Map({ predictions, onLocationClick, isLoading }) {
+function HeatmapLayer({ predictions, showHeatmap }) {
+  const map = useMap();
+  const heatLayerRef = useRef(null);
+
+  useEffect(() => {
+    if (showHeatmap && window.L && window.L.heatLayer) {
+      // Create heat points: [lat, lon, intensity]
+      const points = predictions.map(p => [
+        p.lat, 
+        p.lon, 
+        p.risk_score * 10 // scale intensity for visibility
+      ]);
+      
+      const layer = window.L.heatLayer(points, {
+        radius: 25,
+        blur: 15,
+        maxZoom: 10,
+      }).addTo(map);
+      
+      heatLayerRef.current = layer;
+    } else if (heatLayerRef.current) {
+      map.removeLayer(heatLayerRef.current);
+      heatLayerRef.current = null;
+    }
+
+    return () => {
+      if (heatLayerRef.current) {
+        map.removeLayer(heatLayerRef.current);
+      }
+    };
+  }, [predictions, showHeatmap, map]);
+
+  return null;
+}
+
+export default function Map({ predictions, onLocationClick, isLoading, showRoads, showHeatmap }) {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {/* Loading overlay */}
@@ -102,7 +139,8 @@ export default function Map({ predictions, onLocationClick, isLoading }) {
 
         <MapClickHandler onLocationClick={onLocationClick} isLoading={isLoading} />
 
-        {/* Render all prediction markers */}
+        {/* Render all prediction markers in a cluster */}
+        <MarkerClusterGroup chunkedLoading maxClusterRadius={40}>
         {predictions.map((pred, idx) => {
           const cfg = getRiskDetails(pred.risk_score || 0);
           const color = cfg.color;
@@ -178,6 +216,36 @@ export default function Map({ predictions, onLocationClick, isLoading }) {
             </CircleMarker>
           );
         })}
+        </MarkerClusterGroup>
+
+        {/* Road Connectivity Layer */}
+        {showRoads && KEY_ROADS.map(road => {
+          const status = getRoadStatus(road, predictions);
+          return (
+            <Polyline
+              key={road.id}
+              positions={road.coords}
+              color={status.color}
+              weight={4}
+              opacity={0.8}
+            >
+              <Popup>
+                <div>
+                  <strong style={{ display: 'block', marginBottom: '4px' }}>{road.name}</strong>
+                  <span style={{ color: status.color, fontWeight: 'bold' }}>Status: {status.status}</span>
+                  {status.nearestRisk && (
+                    <div style={{ fontSize: '0.8rem', marginTop: '4px', color: '#4b5563' }}>
+                      Nearest Risk: {status.nearestRisk.location_name} ({(status.minDistance * 111).toFixed(1)} km)
+                    </div>
+                  )}
+                </div>
+              </Popup>
+            </Polyline>
+          );
+        })}
+        
+        {/* Heatmap Layer */}
+        <HeatmapLayer predictions={predictions} showHeatmap={showHeatmap} />
       </MapContainer>
 
       {/* Map legend */}

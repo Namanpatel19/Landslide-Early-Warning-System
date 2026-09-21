@@ -9,6 +9,7 @@ import { ShieldCheck, XCircle, Clock, MapPin, Bell, ArrowLeft, RefreshCw, Eye, C
 
 import AutoScannedGrid from '../components/AutoScannedGrid';
 import LocationDetailDrawer from '../components/LocationDetailDrawer';
+import EmergencyPriorityPanel from '../components/EmergencyPriorityPanel';
 import { predictRisk } from '../services/api';
 import { getRiskDetails } from '../utils/helpers';
 import { translations } from '../utils/translations';
@@ -210,8 +211,8 @@ export default function AdminDashboard() {
           <ArrowLeft size={16} /> {t.backToCitizen}
         </Link>
         <div className="portal-logo">
-          <img src="/logo.png" alt="LandWatch" style={{ width: 28, height: 28 }} />
-          <span>LandWatch <strong>NER</strong></span>
+          <img src="/logo.png" alt="Logo" style={{ width: 28, height: 28 }} />
+          <span>AI-Based Risk Monitoring <strong>NER</strong></span>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <select value={lang} onChange={e => setLang(e.target.value)} className="form-input" style={{ padding: '4px 12px', background: '#fff', fontSize: '0.8rem', height: 32 }}>
@@ -265,6 +266,9 @@ export default function AdminDashboard() {
         <button className={`admin-tab ${tab === 'map' ? 'active' : ''}`} onClick={() => setTab('map')}>
           <MapPin size={14} /> {t.liveRiskMap}
         </button>
+        <button className={`admin-tab ${tab === 'triage' ? 'active' : ''}`} onClick={() => setTab('triage')}>
+          <ShieldCheck size={14} /> Emergency Prioritization
+        </button>
         <button className={`admin-tab ${tab === 'reports' ? 'active' : ''}`} onClick={() => setTab('reports')}>
           <Eye size={14} /> {t.publicReports} ({reports.length})
         </button>
@@ -276,15 +280,20 @@ export default function AdminDashboard() {
       <div className="admin-body">
         {tab === 'map' && (
           <div style={{ position: 'relative' }}>
-            <AutoScannedGrid onLocationClick={handleLocationClick} />
+            <AutoScannedGrid onLocationClick={handleLocationClick} t={t} />
             {drawerOpen && (
               <LocationDetailDrawer
                 prediction={activePrediction}
                 isLoading={mapLoading}
                 onClose={() => { setDrawerOpen(false); setActivePrediction(null); }}
+                t={t}
               />
             )}
           </div>
+        )}
+
+        {tab === 'triage' && (
+          <EmergencyPriorityPanel t={t} />
         )}
 
         {tab === 'reports' && (
@@ -377,7 +386,7 @@ export default function AdminDashboard() {
                         {alert.location_name}
                       </div>
                       <div className="alert-row-meta">
-                        {cfg.level} Risk · {(alert.risk_score * 100).toFixed(1)}% score
+                        {t[cfg.level.toLowerCase()] || cfg.level} Risk · {(alert.risk_score * 100).toFixed(1)}% score
                         {' · '}{new Date(alert.timestamp).toLocaleString()}
                       </div>
                     </div>
@@ -386,7 +395,7 @@ export default function AdminDashboard() {
                         padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
                         background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
                       }}>
-                        {cfg.level.toUpperCase()}
+                        {(t[cfg.level.toLowerCase()] || cfg.level).toUpperCase()}
                       </span>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button 

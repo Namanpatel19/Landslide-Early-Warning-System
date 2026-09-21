@@ -6,7 +6,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Camera, Upload, MapPin, CheckCircle, AlertCircle, X, ArrowLeft, Crosshair } from 'lucide-react';
-import { uploadReport } from '../services/api';
+import { uploadReport, getPublicAlerts } from '../services/api';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -40,14 +40,21 @@ export default function CitizenPortal() {
   const [result, setResult]         = useState(null);
   const [error, setError]           = useState(null);
   const fileRef = useRef();
+  const cameraRef = useRef();
 
   const [language, setLanguage]     = useState('English');
+  const [reportType, setReportType] = useState('Crack/Fissure');
   const [offlineSyncing, setOfflineSyncing] = useState(false);
+  const [publicAlerts, setPublicAlerts] = useState([]);
 
   useEffect(() => {
     // Attempt sync when coming online
     const handleOnline = () => syncOfflineReports();
     window.addEventListener('online', handleOnline);
+    
+    // Fetch public alerts
+    getPublicAlerts().then(setPublicAlerts).catch(console.error);
+
     return () => window.removeEventListener('online', handleOnline);
   }, []);
 
@@ -69,6 +76,7 @@ export default function CitizenPortal() {
         if (report.lon) fd.append('lon', report.lon);
         fd.append('location_name', report.location_name);
         fd.append('language', report.language || 'English');
+        fd.append('report_type', report.report_type || 'Other');
         
         await uploadReport(fd);
       } catch (err) {
@@ -79,6 +87,24 @@ export default function CitizenPortal() {
     setOfflineSyncing(false);
     if (remaining.length === 0) {
       alert("All offline reports have been synced successfully!");
+    }
+  };
+
+  const fetchLocationName = async (lat, lon) => {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+      const data = await res.json();
+      if (data && data.address) {
+        const { road, suburb, neighbourhood, city, town, village, state } = data.address;
+        const local = neighbourhood || suburb || village || town || road || "Unknown Area";
+        const region = city || state || "";
+        const shortName = [local, region].filter(Boolean).join(", ");
+        setLocationName(shortName);
+      } else if (data && data.display_name) {
+        setLocationName(data.display_name.split(',').slice(0, 3).join(', '));
+      }
+    } catch (err) {
+      console.error("Reverse geocoding failed", err);
     }
   };
 
@@ -94,7 +120,11 @@ export default function CitizenPortal() {
   const handleDrop = (e) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
+    if (file && (file.type.startsWith('image/') || file.type.startsWith('video/'))) {
+      if (file.size > 50 * 1024 * 1024) { // 50MB limit
+          setError("File size exceeds 50MB limit.");
+          return;
+      }
       setImage(file);
       setPreview(URL.createObjectURL(file));
     }
@@ -113,7 +143,8 @@ export default function CitizenPortal() {
           lat: manualLat,
           lon: manualLon,
           location_name: locationName || 'Unknown Location',
-          language: language
+          language: language,
+          report_type: reportType
         });
         localStorage.setItem('offline_reports', JSON.stringify(offlineReports));
         setResult({
@@ -141,6 +172,7 @@ export default function CitizenPortal() {
     if (manualLon) formData.append('lon', manualLon);
     formData.append('location_name', locationName || 'Unknown Location');
     formData.append('language', language);
+    formData.append('report_type', reportType);
 
     try {
       const data = await uploadReport(formData);
@@ -164,13 +196,23 @@ export default function CitizenPortal() {
       {/* Header */}
       <div className="portal-topbar" style={{ justifyContent: 'space-between' }}>
         <div className="portal-logo">
-          <img src="/logo.png" alt="LandWatch" style={{ width: 28, height: 28 }} />
-          <span>LandWatch <strong>NER</strong></span>
+          <img src="/logo.png" alt="Logo" style={{ width: 28, height: 28 }} />
+          <span>AI-Based Risk Monitoring <strong>NER</strong></span>
         </div>
         <Link to="/admin" className="portal-back" style={{ background: '#f8fafc', color: '#16a34a', border: '1px solid #bbf7d0' }}>
           Authority Portal
         </Link>
       </div>
+
+      {publicAlerts.length > 0 && (
+        <div style={{ background: '#fef2f2', borderBottom: '1px solid #fca5a5', padding: '12px 24px', color: '#dc2626', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+          {publicAlerts.map(alert => (
+            <div key={alert.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '600' }}>
+               {alert.message}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="portal-hero">
         <div className="portal-hero-icon">
@@ -238,7 +280,11 @@ export default function CitizenPortal() {
             >
               {preview ? (
                 <div className="preview-wrapper">
-                  <img src={preview} alt="Preview" className="preview-img" />
+                  {image && image.type.startsWith('video/') ? (
+                      <video src={preview} controls className="preview-img" style={{maxHeight: 200, width: 'auto'}} />
+                  ) : (
+                      <img src={preview} alt="Preview" className="preview-img" />
+                  )}
                   <button
                     type="button"
                     className="preview-remove"
@@ -248,21 +294,36 @@ export default function CitizenPortal() {
                   </button>
                 </div>
               ) : (
-                <>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <Upload size={32} color="#d97706" />
                   <p className="drop-zone-text">
                     <strong>Click to upload</strong> or drag & drop
                   </p>
+                  <button 
+                    type="button" 
+                    className="btn-secondary" 
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '6px 12px' }}
+                    onClick={(e) => { e.stopPropagation(); cameraRef.current.click(); }}
+                  >
+                    <Camera size={14} /> Open Camera
+                  </button>
                   <p className="drop-zone-subtext">
-                    JPG, PNG, HEIC · GPS metadata will be auto-extracted
+                    JPG, PNG, HEIC, MP4, WEBM (Max 50MB) · GPS metadata auto-extracted
                   </p>
-                </>
+                </div>
               )}
             </div>
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="image/*,video/mp4,video/webm,video/quicktime"
+              onChange={handleFile}
+              style={{ display: 'none' }}
+            />
+            <input
+              ref={cameraRef}
+              type="file"
+              accept="image/*,video/mp4,video/webm,video/quicktime"
               capture="environment"
               onChange={handleFile}
               style={{ display: 'none' }}
@@ -307,15 +368,19 @@ export default function CitizenPortal() {
             <button 
               type="button" 
               className="btn-secondary"
-              style={{ width: '100%', marginBottom: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+              style={{ width: '100%', marginBottom: '1.5rem', padding: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155', fontWeight: '600' }}
               onClick={() => {
                 if (navigator.geolocation) {
                   navigator.geolocation.getCurrentPosition(
                     (pos) => {
-                      setManualLat(pos.coords.latitude.toFixed(6));
-                      setManualLon(pos.coords.longitude.toFixed(6));
+                      const lat = pos.coords.latitude.toFixed(6);
+                      const lon = pos.coords.longitude.toFixed(6);
+                      setManualLat(lat);
+                      setManualLon(lon);
+                      fetchLocationName(lat, lon);
                     },
-                    (err) => alert("Could not fetch location: " + err.message)
+                    (err) => alert("Could not fetch location: " + err.message),
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                   );
                 } else {
                   alert("Geolocation is not supported by your browser.");
@@ -338,8 +403,11 @@ export default function CitizenPortal() {
                 <LocationPicker 
                   position={manualLat && manualLon ? {lat: parseFloat(manualLat), lng: parseFloat(manualLon)} : null}
                   setPosition={(pos) => {
-                    setManualLat(pos.lat.toFixed(6));
-                    setManualLon(pos.lng.toFixed(6));
+                    const lat = pos.lat.toFixed(6);
+                    const lon = pos.lng.toFixed(6);
+                    setManualLat(lat);
+                    setManualLon(lon);
+                    fetchLocationName(lat, lon);
                   }}
                 />
               </MapContainer>
@@ -371,6 +439,21 @@ export default function CitizenPortal() {
               </select>
             </div>
 
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label className="form-label">Report Type</label>
+              <select
+                value={reportType}
+                onChange={e => setReportType(e.target.value)}
+                className="form-input"
+                style={{ appearance: 'auto' }}
+              >
+                <option value="Crack/Fissure">Crack/Fissure</option>
+                <option value="Slope Movement">Slope Movement</option>
+                <option value="Blocked Road">Blocked Road</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
             {error && (
               <div className="form-error">
                 <AlertCircle size={15} /> {error}
@@ -396,7 +479,7 @@ export default function CitizenPortal() {
 
       <div className="portal-footer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
         <div>
-          This service is provided by the LandWatch NER Early Warning System for Northeast India.
+          This service is provided by the AI-Based Early Warning and Landslide Risk Monitoring System in NER.
           For emergencies, contact local disaster management authorities immediately.
         </div>
         

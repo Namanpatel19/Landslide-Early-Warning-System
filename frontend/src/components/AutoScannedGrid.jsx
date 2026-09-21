@@ -7,7 +7,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { getAutoScanned, forceSweep } from '../services/api';
 import { getRiskDetails } from '../utils/helpers';
 import GlobalAlertModal from './GlobalAlertModal';
-import { RefreshCw, AlertTriangle, ShieldCheck, Shield, Clock, MapPin } from 'lucide-react';
+import Map from './Map';
+import { RefreshCw, AlertTriangle, ShieldCheck, Shield, Clock, MapPin, Grid, Map as MapIcon, Layers, Route } from 'lucide-react';
 
 function timeAgo(ts) {
   if (!ts) return 'Never';
@@ -25,12 +26,23 @@ function ConfBar({ value, color }) {
   );
 }
 
-export default function AutoScannedGrid({ onLocationClick }) {
+export default function AutoScannedGrid({ onLocationClick, t }) {
   const [locations, setLocations]   = useState([]);
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSynced, setLastSynced] = useState(null);
   const [filter, setFilter]         = useState('All');
+  const [regionFilter, setRegionFilter] = useState('All Regions');
+  const [viewMode, setViewMode]     = useState('grid');
+  const [showRoads, setShowRoads]   = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, regionFilter]);
 
   const fetchLocations = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -68,12 +80,22 @@ export default function AutoScannedGrid({ onLocationClick }) {
   };
 
   const FILTERS = ['All', 'Critical', 'High', 'Medium', 'Low'];
-  const filtered = filter === 'All'
-    ? locations
-    : locations.filter(l => getRiskDetails(l.risk_score).level === filter);
+  
+  const regions = ['All Regions', ...new Set(locations.map(l => l.location_name?.split('(')[0]?.trim()).filter(Boolean))];
+
+  let filtered = locations;
+  if (filter !== 'All') {
+    filtered = filtered.filter(l => getRiskDetails(l.risk_score).level === filter);
+  }
+  if (regionFilter !== 'All Regions') {
+    filtered = filtered.filter(l => l.location_name?.split('(')[0]?.trim() === regionFilter);
+  }
 
   const critCount  = locations.filter(l => getRiskDetails(l.risk_score).level === 'Critical').length;
   const highCount  = locations.filter(l => getRiskDetails(l.risk_score).level === 'High').length;
+  
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   return (
     <div className="autoscan-container">
@@ -114,9 +136,70 @@ export default function AutoScannedGrid({ onLocationClick }) {
             title="Refresh all locations now"
           >
             <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
-            {refreshing ? 'Scanning…' : 'Refresh'}
+            {refreshing ? t.scanning : t.refresh}
           </button>
         </div>
+      </div>
+
+      <div style={{ padding: '0 1.25rem', marginBottom: '1rem', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="filter-tabs" style={{ background: '#f5f5f4', padding: '4px', borderRadius: '9999px', display: 'inline-flex' }}>
+              <button 
+                 className={`filter-tab ${viewMode === 'grid' ? 'active' : ''}`}
+                 onClick={() => setViewMode('grid')}
+                 style={{ border: 'none', background: viewMode === 'grid' ? '#1c1917' : 'transparent' }}
+              >
+                 <Grid size={14} /> {t.gridView || "Grid View"}
+              </button>
+              <button 
+                 className={`filter-tab ${viewMode === 'map' ? 'active' : ''}`}
+                 onClick={() => setViewMode('map')}
+                 style={{ border: 'none', background: viewMode === 'map' ? '#1c1917' : 'transparent' }}
+              >
+                 <MapIcon size={14} /> {t.mapView || "Map View"}
+              </button>
+          </div>
+
+          {viewMode === 'map' && (
+              <div className="filter-tabs" style={{ marginLeft: '8px' }}>
+                 <button 
+                    className={`filter-tab ${showRoads ? 'active' : ''}`}
+                    onClick={() => setShowRoads(!showRoads)}
+                    style={{ padding: '5px 12px', background: showRoads ? '#16a34a' : '', borderColor: showRoads ? '#16a34a' : '' }}
+                 >
+                    <Route size={14} /> {t.connectivities || "Connectivities"}
+                 </button>
+                 <button 
+                    className={`filter-tab ${showHeatmap ? 'active' : ''}`}
+                    onClick={() => setShowHeatmap(!showHeatmap)}
+                    style={{ padding: '5px 12px', background: showHeatmap ? '#ea580c' : '', borderColor: showHeatmap ? '#ea580c' : '' }}
+                 >
+                    <Layers size={14} /> {t.riskHeatmap || "Risk Heatmap"}
+                 </button>
+              </div>
+          )}
+
+          {viewMode === 'grid' && (
+              <select 
+                value={regionFilter}
+                onChange={(e) => setRegionFilter(e.target.value)}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '9999px',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-surface)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--color-text-secondary)',
+                  cursor: 'pointer',
+                  marginLeft: '8px',
+                  outline: 'none'
+                }}
+              >
+                {regions.map(r => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+          )}
       </div>
 
       {/* ── Filter Tabs ──────────────────────────────────────────────────── */}
@@ -147,8 +230,22 @@ export default function AutoScannedGrid({ onLocationClick }) {
         })}
       </div>
 
-      {/* ── Location Cards ──────────────────────────────────────────────── */}
+      {/* ── Location Cards or Map ──────────────────────────────────────────────── */}
       <GlobalAlertModal locations={locations} />
+      
+      {viewMode === 'map' ? (
+          <div style={{ height: 'calc(100vh - 250px)', width: '100%', padding: '0 1.25rem', paddingBottom: '1.25rem' }}>
+              <div style={{ height: '100%', width: '100%', borderRadius: '12px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                  <Map 
+                     predictions={filtered} 
+                     onLocationClick={(lat, lon, data) => onLocationClick(lat, lon, data)} 
+                     isLoading={loading} 
+                     showRoads={showRoads}
+                     showHeatmap={showHeatmap}
+                  />
+              </div>
+          </div>
+      ) : (
       <div className="locations-grid">
         {loading ? (
           <div className="empty-state">
@@ -161,18 +258,20 @@ export default function AutoScannedGrid({ onLocationClick }) {
         ) : filtered.length === 0 ? (
           <div className="empty-state">
             <ShieldCheck size={32} color="#16a34a" />
-            <p>No {filter !== 'All' ? filter : ''} risk locations found</p>
+            <p>{t.noRiskLocations || "No risk locations found"}</p>
             <button className="refresh-btn" onClick={handleForceSweep}>
-              <RefreshCw size={14} /> Scan Now
+              <RefreshCw size={14} /> {t.scanNow || "Scan Now"}
             </button>
           </div>
         ) : (
-          filtered.map((loc, idx) => {
+          paginated.map((loc, idx) => {
             const cfg = getRiskDetails(loc.risk_score);
             const isCritical = cfg.level === 'Critical';
+            // True index based on pagination for rank indicator
+            const globalIdx = (currentPage - 1) * ITEMS_PER_PAGE + idx;
             return (
               <div
-                key={loc.id || idx}
+                key={loc.id || globalIdx}
                 className={`location-card ${isCritical ? 'location-card-critical' : ''}`}
                 style={{ borderTop: `3px solid ${cfg.color}` }}
                 onClick={() => onLocationClick(loc.lat, loc.lon, {
@@ -188,7 +287,7 @@ export default function AutoScannedGrid({ onLocationClick }) {
               >
                 {/* Rank indicator */}
                 <div className="card-rank" style={{ color: cfg.color }}>
-                  #{idx + 1}
+                  #{globalIdx + 1}
                 </div>
 
                 {/* Location name & badge */}
@@ -198,7 +297,7 @@ export default function AutoScannedGrid({ onLocationClick }) {
                     {loc.location_name}
                   </div>
                   <span className="risk-badge" style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-                    {cfg.level.toUpperCase()}
+                    {(t[cfg.level.toLowerCase()] || cfg.level).toUpperCase()}
                   </span>
                 </div>
 
@@ -208,7 +307,7 @@ export default function AutoScannedGrid({ onLocationClick }) {
                     <div style={{ fontSize: '1.25rem', fontWeight: 800, color: cfg.color }}>
                       {(loc.risk_score * 100).toFixed(1)}%
                     </div>
-                    <div style={{ fontSize: '0.65rem', color: '#78716c', fontWeight: 600, textTransform: 'uppercase' }}>Risk Score</div>
+                    <div style={{ fontSize: '0.65rem', color: '#78716c', fontWeight: 600, textTransform: 'uppercase' }}>{t.riskScore || "Risk Score"}</div>
                   </div>
 
                 </div>
@@ -226,8 +325,7 @@ export default function AutoScannedGrid({ onLocationClick }) {
 
                 {/* Footer */}
                 <div className="card-footer">
-                  <Clock size={11} />
-                  {timeAgo(loc.timestamp)}
+                  <div style={{ flex: 1 }} />
                   <span className="card-click-hint">Click for details →</span>
                 </div>
 
@@ -237,6 +335,30 @@ export default function AutoScannedGrid({ onLocationClick }) {
           })
         )}
       </div>
+      )}
+
+      {/* Pagination Controls */}
+      {viewMode === 'grid' && totalPages > 1 && (
+        <div style={{ padding: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '1rem' }}>
+           <button 
+             className="refresh-btn"
+             disabled={currentPage === 1}
+             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+           >
+             Previous
+           </button>
+           <span style={{ fontSize: '14px', fontWeight: 600, color: '#4b5563' }}>
+             Page {currentPage} of {totalPages}
+           </span>
+           <button 
+             className="refresh-btn"
+             disabled={currentPage === totalPages}
+             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+           >
+             Next
+           </button>
+        </div>
+      )}
     </div>
   );
 }

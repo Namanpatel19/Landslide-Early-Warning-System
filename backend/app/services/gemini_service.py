@@ -1,46 +1,61 @@
 import os
 import json
 import logging
+import warnings
+
+# Suppress FutureWarning from google.generativeai (deprecated but still functional)
+warnings.filterwarnings("ignore", category=FutureWarning, module="google")
 import google.generativeai as genai
+
 from typing import Optional, Dict, Any
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Only gemini-3.6-flash is available for this API key tier.
+# Background sweeper Gemini calls are DISABLED in tasks.py to preserve the
+# 20 RPD quota exclusively for citizen portal image uploads.
 if settings.has_gemini:
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    # We use gemini-1.5-flash for speed and multimodal capabilities
     _model = genai.GenerativeModel('gemini-3.6-flash')
+    logger.info("Gemini model ready: gemini-3.6-flash (20 RPD quota reserved for uploads)")
 else:
     _model = None
 
-async def generate_risk_explanation(features: Dict[str, Any], risk_level: str, confidence: float, rag_context: str = "") -> Optional[str]:
+
+async def generate_risk_explanation(
+    features: Dict[str, Any],
+    risk_level: str,
+    confidence: float,
+    rag_context: str = "",
+) -> Optional[str]:
     """
-    Generates a short, plain-language summary explaining the landslide risk.
+    Generates a plain-language explanation of landslide risk.
+    NOTE: Called ONLY from admin predict endpoint, not the background sweeper.
     """
     if not _model:
         return None
-        
+
     prompt = f"""
     You are an expert geologist and AI assistant for the LandWatch NER landslide early warning system.
     We just ran our ML model for a location in Northeast India and got these results:
     - Risk Level: {risk_level}
     - Model Confidence: {confidence*100:.1f}%
-    
+
     Current conditions:
     - Rainfall Intensity: {features.get('rainfall_intensity_mm', 0)} mm/day
     - Slope Angle: {features.get('slope_angle', 0)} degrees
     - Soil Moisture: {features.get('soil_moisture', 0)*100:.1f}%
     - Seismic Activity: {features.get('seismic_activity', 0)} (Richter scale equivalent)
-    
+
     {rag_context}
 
-    Write a 2-3 sentence, plain-language explanation of WHY this risk level was assigned based on these conditions. 
+    Write a 2-3 sentence, plain-language explanation of WHY this risk level was assigned based on these conditions.
     If RAG Context is provided, explicitly mention that these conditions have historically led to landslides here.
     Make it easy for a non-technical local authority or citizen to understand. Do not use markdown.
     """
-    
+
     try:
         response = await _model.generate_content_async(prompt)
         return response.text.strip()
@@ -48,107 +63,61 @@ async def generate_risk_explanation(features: Dict[str, Any], risk_level: str, c
         logger.error(f"Gemini API error during explanation generation: {e}")
         return None
 
+
 async def analyze_landslide_image(image_path: str, language: str = "English") -> Dict[str, Any]:
     """
-    Analyzes an uploaded photo for visual signs of landslide risk (cracks, erosion).
-    Returns a JSON structure with analysis and severity.
+    Analyzes an uploaded citizen photo for visual signs of landslide risk.
+    Returns a JSON structure with is_relevant, analysis, and severity.
     """
     if not _model:
         return {"error": "Gemini API not configured", "severity": "Pending"}
-        
+
     import PIL.Image
-    
+
     try:
         img = PIL.Image.open(image_path)
     except Exception as e:
         logger.error(f"Could not open image for Gemini analysis: {e}")
         return {"error": "Invalid image file", "severity": "Pending"}
-        
+
     prompt = f"""
     Analyze this image for signs of potential landslide risk or land instability.
     First, verify if the image is relevant. An image is relevant ONLY if it shows outdoor terrain, mountains, slopes, soil cracks, erosion, mud, or potential illegal mining/construction activity.
     If the image is a selfie, indoor photo, screenshot, or clearly irrelevant, mark "is_relevant" as false.
-    
+
     If relevant, look for:
     1. Soil cracks or fissures
     2. Significant soil erosion or exposed bare earth on slopes
     3. Abnormal water seepage on slopes
     4. Debris accumulation or fallen rocks
-    
+
     Return ONLY a valid JSON object with exactly these three keys:
     "is_relevant": true or false (boolean).
     "analysis": A 1-2 sentence description of what you see regarding land stability. MUST BE TRANSLATED TO {language}.
     "severity": One of these exact strings based on visual evidence: "Low", "Medium", "High", "Critical". If no risk is visible or if is_relevant is false, use "Low".
     """
-    
+
     try:
         response = await _model.generate_content_async([prompt, img])
         text = response.text.strip()
-        
-        # Clean up possible markdown formatting in the response
+
         if text.startswith("```json"):
             text = text[7:-3].strip()
         elif text.startswith("```"):
             text = text[3:-3].strip()
-            
+
         result = json.loads(text)
-        
-        # Validate severity
+
         if result.get("severity") not in ["Low", "Medium", "High", "Critical"]:
-            result["severity"] = "Medium" # safe fallback
-            
+            result["severity"] = "Medium"
+
+        logger.info(f"Gemini image scan ✅  is_relevant={result.get('is_relevant')}, severity={result.get('severity')}")
         return result
     except Exception as e:
         logger.error(f"Gemini API error during image analysis: {e}")
         return {"error": "Analysis failed", "severity": "Pending"}
 
+
 async def analyze_landslide_image_bytes(image_bytes: bytes) -> Dict[str, Any]:
-    """
-    Analyzes an in-memory image (e.g. satellite tile) for visual signs of landslide risk.
-    Returns a JSON structure with analysis and severity.
-    """
-    if not _model:
-        return {"error": "Gemini API not configured", "severity": "Pending"}
-        
-    import io
-    import PIL.Image
-    
-    try:
-        img = PIL.Image.open(io.BytesIO(image_bytes))
-    except Exception as e:
-        logger.error(f"Could not open image bytes for Gemini analysis: {e}")
-        return {"error": "Invalid image bytes", "severity": "Pending"}
-        
-    prompt = """
-    Analyze this satellite or drone imagery for signs of potential landslide risk or land instability.
-    Look for:
-    1. Visible soil cracks or fissures
-    2. Significant soil erosion or exposed bare earth on slopes
-    3. Abnormal water seepage on slopes
-    4. Debris accumulation or fallen rocks
-    
-    Return ONLY a valid JSON object with exactly these two keys:
-    "analysis": A 1-2 sentence description of what you see regarding land stability.
-    "severity": One of these exact strings based on visual evidence: "Low", "Medium", "High", "Critical". If no risk is visible, use "Low".
-    """
-    
-    try:
-        response = await _model.generate_content_async([prompt, img])
-        text = response.text.strip()
-        
-        # Clean up possible markdown formatting in the response
-        if text.startswith("```json"):
-            text = text[7:-3].strip()
-        elif text.startswith("```"):
-            text = text[3:-3].strip()
-            
-        result = json.loads(text)
-        
-        # Validate severity
-        if result.get("severity") not in ["Low", "Medium", "High", "Critical"]:
-            result["severity"] = "Medium" # safe fallback
-            
-        return result
-    except Exception as e:
-        logger.error(f"Gemini API error during byte image analysis: {e}")
-        return {"error": "Analysis failed", "severity": "Pending"}
+    """Satellite tile analysis — bypassed in sweeper to save quota."""
+    return {"severity": "Pending", "analysis": "Satellite vision bypassed."}

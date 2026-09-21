@@ -13,8 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..schemas import PredictRequest, PredictResponse, FeatureValues
-from ..database import get_db, PredictionModel, AlertModel
+from ..database import get_db, PredictionModel, AlertModel, PublicAlertModel
 from ..services.weather import fetch_current_weather, fetch_rainfall_history
+from ..services.sms_service import send_critical_alert_sms
 from ..services.seismic import fetch_seismic_activity
 from ..services.geo import fetch_geo_features
 from ..services.geocoding import reverse_geocode        # Real Nominatim geocoding
@@ -78,6 +79,8 @@ async def predict_risk(
         "rainfall_last_3_days":  weather_data.get("rainfall_last_3_days", 0.0),
         "rainfall_last_7_days":  weather_data.get("rainfall_last_7_days", 0.0),
         "rainfall_last_15_days": weather_data.get("rainfall_last_15_days", 0.0),
+        "forecast_rainfall_next_3_days": weather_data.get("forecast_rainfall_next_3_days", 0.0),
+        "forecast_rainfall_next_5_days": weather_data.get("forecast_rainfall_next_5_days", 0.0),
         "humidity":              weather_data["humidity"],
         "temperature":           weather_data["temperature"],
         "soil_moisture":         weather_data["soil_moisture"],
@@ -143,6 +146,7 @@ async def predict_risk(
             location_name=location_name,
             risk_level=result["risk_level"],
             confidence=result["confidence"],
+            risk_score=ensemble_score,
             top_factors_json=json.dumps(result["top_factors"]),
             notified=False,
             timestamp=now,
@@ -153,10 +157,20 @@ async def predict_risk(
             f"ensemble_score={ensemble_score:.3f}"
         )
 
+        if result["risk_level"] == "Critical":
+            # 1. Create Public Alert
+            db.add(PublicAlertModel(
+                location_name=location_name,
+                message=f"⚠️ High landslide risk detected near {location_name}. Avoid the marked zone. Stay alert for updates.",
+                timestamp=now,
+            ))
+            # 2. Trigger SMS Alert (Async task creation to not block)
+            asyncio.create_task(send_critical_alert_sms(location_name, ensemble_score))
+
     await db.commit()
 
     # ─── Generate Gemini plain-language explanation (Async) ───────────────────
-    explanation = await generate_risk_explanation(features, result["risk_level"], result["confidence"])
+    explanation = await generate_risk_explanation(features, result["risk_level"], result["confidence"], language=req.language)
 
     return PredictResponse(
         lat=req.lat,
@@ -178,6 +192,8 @@ async def predict_risk(
             rainfall_last_3_days=features["rainfall_last_3_days"],
             rainfall_last_7_days=features["rainfall_last_7_days"],
             rainfall_last_15_days=features["rainfall_last_15_days"],
+            forecast_rainfall_next_3_days=features["forecast_rainfall_next_3_days"],
+            forecast_rainfall_next_5_days=features["forecast_rainfall_next_5_days"],
             humidity=features["humidity"],
             temperature=features["temperature"],
             soil_moisture=features["soil_moisture"],

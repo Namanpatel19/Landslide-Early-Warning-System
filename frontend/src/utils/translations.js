@@ -24,7 +24,21 @@ export const translations = {
     enterPassword: "Enter Password...",
     authenticate: "Authenticate",
     pleaseEnterPass: "Please enter your authority passcode to access the disaster management dashboard.",
-    language: "Language"
+    language: "Language",
+    riskScore: "Risk Score",
+    lastSynced: "Last synced",
+    gridView: "Grid View",
+    mapView: "Map View",
+    connectivities: "Connectivities",
+    riskHeatmap: "Risk Heatmap",
+    scanning: "Scanning...",
+    noRiskLocations: "No risk locations found",
+    scanNow: "Scan Now",
+    all: "All",
+    critical: "Critical",
+    high: "High",
+    medium: "Medium",
+    low: "Low"
   },
   Hindi: {
     authControlPanel: "अधिकारी नियंत्रण कक्ष",
@@ -51,7 +65,21 @@ export const translations = {
     enterPassword: "पासवर्ड दर्ज करें...",
     authenticate: "प्रमाणित करें",
     pleaseEnterPass: "कृपया आपदा प्रबंधन डैशबोर्ड तक पहुंचने के लिए अपना अधिकारी पासकोड दर्ज करें।",
-    language: "भाषा"
+    language: "भाषा",
+    riskScore: "जोखिम स्कोर",
+    lastSynced: "अंतिम सिंक",
+    gridView: "ग्रिड व्यू",
+    mapView: "मैप व्यू",
+    connectivities: "सड़क संपर्क",
+    riskHeatmap: "जोखिम हीटमैप",
+    scanning: "स्कैनिंग...",
+    noRiskLocations: "कोई जोखिम स्थान नहीं मिला",
+    scanNow: "अभी स्कैन करें",
+    all: "सभी",
+    critical: "गंभीर",
+    high: "उच्च",
+    medium: "मध्यम",
+    low: "निम्न"
   },
   Assamese: {
     authControlPanel: "কৰ্তৃপক্ষ নিয়ন্ত্ৰণ পেনেল",
@@ -78,6 +106,20 @@ export const translations = {
     enterPassword: "পাছৱৰ্ড প্ৰবিষ্ট কৰক...",
     authenticate: "প্ৰমাণিত কৰক",
     pleaseEnterPass: "দৰ্যোগ ব্যৱস্থাপনা ডেচবৰ্ডত প্ৰৱেশ কৰিবলৈ অনুগ্ৰহ কৰি আপোনাৰ কৰ্তৃপক্ষৰ পাছক'ড প্ৰবিষ্ট কৰক।",
-    language: "ভাষা"
+    language: "ভাষা",
+    riskScore: "বিপদাশংকা স্কোৰ",
+    lastSynced: "অন্তিম চিংক",
+    gridView: "গ্ৰিড ভিউ",
+    mapView: "মেপ ভিউ",
+    connectivities: "সংযোগসমূহ",
+    riskHeatmap: "হিটমেপ",
+    scanning: "স্কেনিং...",
+    noRiskLocations: "কোনো বিপদাশংকা স্থান পোৱা নগল",
+    scanNow: "এতিয়া স্কেন কৰক",
+    all: "সকলো",
+    critical: "গুৰুতৰ",
+    high: "উচ্চ",
+    medium: "মধ্যম",
+    low: "নিম্ন"
   }
 };

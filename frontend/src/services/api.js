@@ -63,6 +63,10 @@ export async function getAlerts(limit = 50) {
   return apiFetch(`/alerts?limit=${limit}`);
 }
 
+export async function getPublicAlerts() {
+  return apiFetch('/alerts/public');
+}
+
 export async function notifyAuthorities(predictionId) {
   return apiFetch('/alerts/notify', {
     method: 'POST',

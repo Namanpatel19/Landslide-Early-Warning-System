@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Landslide Early Warning System API...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"GNews API: {'configured' if settings.has_gnews else 'not set (using RSS fallback)'}")
-    logger.info(f"Sentinel Hub: {'configured' if settings.has_sentinel else 'not set (using ESRI tiles)'}")
+    logger.info(f"Planet Satellite: {'configured' if settings.has_planet else 'not set (using ESRI tiles)'}")
 
     await init_db()
     logger.info("Database initialized")
@@ -56,11 +56,11 @@ async def lifespan(app: FastAPI):
 
 # ─── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="LandWatch NER — Landslide Early Warning API",
+    title="AI-Based Risk Monitoring NER — Landslide Early Warning API",
     description=(
         "AI-powered landslide risk prediction for Northeast India. "
         "Combines real-time weather (Open-Meteo), seismic (USGS), "
-        "satellite imagery (Sentinel Hub/ESRI), and ML (RandomForest) "
+        "satellite imagery (Planet Labs/ESRI), and ML (RandomForest) "
         "to predict Low/Medium/High/Critical risk in under 1 second."
     ),
     version="1.0.0",
@@ -104,12 +104,14 @@ async def health():
         "model_loaded":    is_model_loaded(),
         "environment":     settings.ENVIRONMENT,
         "gnews":           settings.has_gnews,
-        "sentinel_hub":    settings.has_sentinel,
+        "planet":          settings.has_planet,
+        "gemini":          settings.has_gemini,
         "apis": {
-            "weather":  "Open-Meteo (free, no key)",
-            "seismic":  "USGS Earthquake (free, no key)",
-            "geocoding":"OpenStreetMap Nominatim (free, no key)",
-            "satellite": "Sentinel Hub (key) / ESRI World Imagery (free)",
-            "news":     "GNews (key) / Google News RSS (free)",
+            "weather":   "Open-Meteo (free, no key)",
+            "seismic":   "USGS Earthquake (free, no key)",
+            "geocoding": "OpenStreetMap Nominatim (free, no key)",
+            "satellite": "Planet Labs (PlanetScope) / ESRI World Imagery (free fallback)",
+            "news":      "GNews (key) / Google News RSS (free)",
+            "ai_vision": "Google Gemini 3.6 Flash",
         }
     }

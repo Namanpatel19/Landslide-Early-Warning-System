@@ -21,6 +21,7 @@ class PredictRequest(BaseModel):
     lat: float = Field(..., ge=20.0, le=30.0, description="Latitude (NER bounds: 20-30°N)")
     lon: float = Field(..., ge=88.0, le=98.0, description="Longitude (NER bounds: 88-98°E)")
     location_name: Optional[str] = Field(None, description="Optional label for this location")
+    language: str = Field("English", description="Language for Gemini explanation")
 
 
 class FeatureValues(BaseModel):
@@ -36,6 +37,8 @@ class FeatureValues(BaseModel):
     rainfall_last_3_days: float
     rainfall_last_7_days: float
     rainfall_last_15_days: float
+    forecast_rainfall_next_3_days: float = 0.0
+    forecast_rainfall_next_5_days: float = 0.0
     humidity: float
     temperature: float
     soil_moisture: float
@@ -83,6 +86,7 @@ class AlertRecord(BaseModel):
     location_name: str
     risk_level: str
     confidence: float
+    risk_score: float = 0.0
     top_factors: List[Dict[str, Any]]
     notified: bool
     timestamp: datetime
@@ -107,6 +111,27 @@ class AlertsResponse(BaseModel):
     total: int
 
 
+class PublicAlertResponse(BaseModel):
+    id: int
+    location_name: str
+    message: str
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SmsLogResponse(BaseModel):
+    id: int
+    recipient: str
+    message: str
+    status: str
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class ReportResponse(BaseModel):
     id: int
     image_path: str
@@ -114,6 +139,7 @@ class ReportResponse(BaseModel):
     lon: Optional[float]
     location_name: str
     has_exif_gps: bool
+    report_type: str
     gemini_analysis: Optional[str]
     severity: str
     status: str

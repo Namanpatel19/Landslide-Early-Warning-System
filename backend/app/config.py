@@ -28,7 +28,9 @@ class Settings:
     # ── News API (GNews) ─────────────────────────────────────────
     GNEWS_API_KEY: str = os.getenv("GNEWS_API_KEY", "")
 
-    # ── Sentinel Hub ─────────────────────────────────────────────
+    # ── Planet Labs (replaces deprecated Sentinel Hub) ──────────────────
+    PLANET_API_KEY: str = os.getenv("PLANET_API_KEY", "")
+    # Legacy Sentinel Hub keys (kept for reference, no longer functional)
     SENTINELHUB_CLIENT_ID: str = os.getenv("SENTINELHUB_CLIENT_ID", "")
     SENTINELHUB_CLIENT_SECRET: str = os.getenv("SENTINELHUB_CLIENT_SECRET", "")
 
@@ -38,10 +40,20 @@ class Settings:
     # ── Google Gemini ────────────────────────────────────────────
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
+    # ── Twilio SMS ───────────────────────────────────────────────
+    TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    TWILIO_PHONE_NUMBER: str = os.getenv("TWILIO_PHONE_NUMBER", "")
+    TEST_SMS_NUMBERS: str = os.getenv("TEST_SMS_NUMBERS", "")
+
     # ── Convenience flags ────────────────────────────────────────
     @property
     def has_gnews(self) -> bool:
         return bool(self.GNEWS_API_KEY)
+
+    @property
+    def has_planet(self) -> bool:
+        return bool(self.PLANET_API_KEY)
 
     @property
     def has_sentinel(self) -> bool:

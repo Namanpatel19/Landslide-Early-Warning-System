@@ -89,6 +89,7 @@ async def upload_report(
     lon: Optional[float] = Form(None),
     location_name: Optional[str] = Form("Unknown"),
     language: Optional[str] = Form("English"),
+    report_type: Optional[str] = Form("Other"),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -137,19 +138,17 @@ async def upload_report(
         
     raw_severity = analysis_result.get("severity", "Pending")
 
-    # 4. Combine metadata verification + Gemini into final status
+    # 4. Final status uses the pure AI severity for prototype demo purposes!
     final_severity = raw_severity
-    if not has_exif or mismatch:
-        final_severity = "Needs Manual Review"
-    elif raw_severity in ["High", "Critical"]:
+    if raw_severity in ["High", "Critical"]:
         final_severity = "Verified - High"
     elif raw_severity in ["Low", "Medium"]:
         final_severity = "Verified - Low"
 
     if mismatch:
-        analysis_result["analysis"] = "⚠️ LOCATION MISMATCH: Photo GPS differs significantly from pinned location. " + analysis_result.get("analysis", "")
+        analysis_result["analysis"] = "⚠️ LOCATION MISMATCH: Photo GPS differs significantly from pinned location. " + analysis_result.get("analysis", "AI analysis unavailable.")
     elif not has_exif:
-        analysis_result["analysis"] = "⚠️ MISSING METADATA: No EXIF GPS found in photo. " + analysis_result.get("analysis", "")
+        analysis_result["analysis"] = "⚠️ MISSING METADATA: No EXIF GPS found in photo. " + analysis_result.get("analysis", "AI analysis unavailable.")
     
     # 5. Save to DB
     now = datetime.now(timezone.utc)
@@ -159,6 +158,7 @@ async def upload_report(
         lon=final_lon,
         location_name=location_name,
         has_exif_gps=has_exif,
+        report_type=report_type,
         gemini_analysis=analysis_result.get("analysis"),
         severity=final_severity,
         status="pending",

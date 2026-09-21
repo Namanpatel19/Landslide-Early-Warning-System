@@ -239,8 +239,12 @@ def predict(features: dict) -> dict:
     if _explainer:
         try:
             shap_vals = _explainer.shap_values(X_scaled)
-            # shap_vals is a list of arrays (one per class). We take the values for the predicted class.
-            class_shap = shap_vals[predicted_class_idx][0]
+            if isinstance(shap_vals, list):
+                class_shap = shap_vals[predicted_class_idx][0]
+            elif len(shap_vals.shape) == 3:
+                class_shap = shap_vals[0, :, predicted_class_idx]
+            else:
+                class_shap = shap_vals[0]
             
             # Pair feature names with their local SHAP importance
             feat_impact = []
