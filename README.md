@@ -8,7 +8,7 @@
 [![Theme](https://img.shields.io/badge/Theme-Disaster%20Management-red)](https://sih.gov.in/)
 [![Category](https://img.shields.io/badge/Category-Software-blue)](https://sih.gov.in/)
 [![Status](https://img.shields.io/badge/Status-Active-brightgreen)]()
-[![Deadline](https://img.shields.io/badge/Deadline-30%20September%202026-yellow)]()
+
 
 **Ministry of Development of North Eastern Region (MDoNER)**
 
